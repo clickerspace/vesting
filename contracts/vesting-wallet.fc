@@ -1,0 +1,655 @@
+#include "imports/stdlib.fc";
+#include "imports/utils.fc";
+
+;; Jetton Standard Operations (TEP-74)
+const int op::transfer = 0xf8a7ea5;
+
+;; Vesting Wallet Operations
+const int op::send_jettons = 0x7777;
+const int op::claim_unlocked = 0x8888;
+const int op::cancel_vesting = 0x9999;
+const int op::change_recipient = 0xaaaa;
+
+;; Logger Operations
+const int op::update_recipient = 0xd2d2d2d2;
+const int op::update_owner = 0xd3d3d3d3;
+
+;; Permission Constants
+const int permission::only_recipient = 1;
+const int permission::only_owner = 2;
+const int permission::both = 3;
+const int permission::neither = 4;
+
+;; Common Errors
+const int error::invalid_op = 0xffff;  ;; Invalid operation
+const int error::access_denied = 0xffa0; ;; Access denied
+const int error::invalid_amount = 0xffa2; ;; Invalid amount
+
+;; Vesting Specific Errors
+const int error::funds_locked = 0xff05; ;; Cannot send locked funds
+
+;; Send Modes
+const int send_mode::regular = 0; ;; Pay fee separately
+const int send_mode::pay_gas_separately = 1; ;; Pay fees separately, ignore errors
+const int send_mode::carry_remaining_gas = 64; ;; Carry all the remaining value of the inbound message
+const int send_mode::carry_all_balance = 128; ;; Carry all the remaining balance of the contract
+const int send_mode::destroy = 32; ;; Destroy the contract after the message is sent
+
+;; Gas Constants
+const int gas::jetton_transfer = 50000000; ;; Gas amount reserved for jetton transfer 0.05 TON
+const int gas::logger_message = 10000000; ;; Gas amount reserved for logger messages 0.01 TON
+
+;; Vesting Constants
+const int vesting::min_period = 60; ;; Minimum vesting period in seconds (1 minute)
+const int vesting::max_period = 4294967295; ;; Maximum vesting period in seconds (~136 years)
+const int vesting::min_amount = 1000000000; ;; Minimum vesting amount (1 JETTON in nanotons)
+
+;; address utils
+const int ADDRESS_SIZE = 267; ;; 256 + 8
+
+(int, int) unpack_address(slice address) inline {
+    int wc = address~load_int(8);
+    int address_hash = address~load_uint(256);
+    return (wc, address_hash);
+}
+
+slice pack_address(slice address) inline {
+    (int wc, int address_hash) = parse_std_addr(address);
+    return begin_cell().store_int(wc, 8).store_uint(address_hash, 256).end_cell().begin_parse();
+}
+
+;; Helper to compare two addresses
+int equal_slices(slice a, slice b) {
+    return a.slice_hash() == b.slice_hash();
+}
+
+;; Updated Storage TL-B scheme for Vesting Wallet - split into multiple cells
+;; Storage structure is now:
+;; storage#_ ^[owner_address:MsgAddress] ^[recipient_address:MsgAddress jetton_master_address:MsgAddress]
+;;           ^[vesting_total_amount:Coins packed_params:uint128 is_auto_claim:uint1 
+;;             cancel_contract_permission:uint3 change_recipient_permission:uint3]
+;;           ^[claimed_amount:Coins seqno:uint32] ^[logger_address:MsgAddress] = Storage;
+
+;; Unpack vesting parameters from packed format
+(int, int, int, int) unpack_vesting_params(int packed_params) inline {
+    int vesting_start_time = (packed_params >> 96) & 0xFFFFFFFF;
+    int vesting_total_duration = (packed_params >> 64) & 0xFFFFFFFF;
+    int unlock_period = (packed_params >> 32) & 0xFFFFFFFF;
+    int cliff_duration = packed_params & 0xFFFFFFFF;
+    return (vesting_start_time, vesting_total_duration, unlock_period, cliff_duration);
+}
+
+(slice, slice, slice, int, int, int, int, int, int, int, int, int, int, slice) load_data() inline {
+    var ds = get_data().begin_parse();
+    if (ds.slice_empty?()) {
+        return (null(), null(), null(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null());
+    }
+
+    cell cell1 = ds~load_ref();
+    slice data1 = cell1.begin_parse();
+    slice owner_address = data1~load_msg_addr();
+    
+    cell cell2 = ds~load_ref();
+    slice data2 = cell2.begin_parse();
+    slice recipient_address = data2~load_msg_addr();
+    slice jetton_master_address = data2~load_msg_addr();
+    
+    cell cell3 = ds~load_ref();
+    slice data3 = cell3.begin_parse();
+    int vesting_total_amount = data3~load_coins();
+    int packed_params = data3~load_uint(128);
+    int is_auto_claim = data3~load_uint(1);
+    int cancel_contract_permission = data3~load_uint(3);
+    int change_recipient_permission = data3~load_uint(3);
+    
+    ;; Load from cell 4 - claimed amount, seqno and logger address
+    cell cell4 = ds~load_ref();
+    slice data4 = cell4.begin_parse();
+    int claimed_amount = data4~load_coins();
+    int seqno = data4~load_uint(32);
+    slice logger_address = data4~load_msg_addr();
+    
+    ;; Unpack vesting parameters
+    (int vesting_start_time, int vesting_total_duration, int unlock_period, int cliff_duration) = unpack_vesting_params(packed_params);
+
+    return (
+        owner_address,
+        recipient_address,
+        jetton_master_address,
+        vesting_total_amount,
+        vesting_start_time,
+        vesting_total_duration,
+        unlock_period,
+        cliff_duration,
+        is_auto_claim,
+        cancel_contract_permission,
+        change_recipient_permission,
+        claimed_amount,
+        seqno,
+        logger_address
+    );
+}
+
+() save_data(slice owner_address, slice recipient_address, slice jetton_master_address,
+    int vesting_total_amount,
+    int vesting_start_time, int vesting_total_duration, 
+    int unlock_period, int cliff_duration, 
+    int is_auto_claim, int cancel_contract_permission, int change_recipient_permission,
+    int claimed_amount, int seqno, slice logger_address) impure inline {
+    
+    ;; Pack vesting parameters
+    int packed_params = (vesting_start_time << 96) | 
+    (vesting_total_duration << 64) | 
+    (unlock_period << 32) | 
+                       cliff_duration;
+
+    ;; Cell 1 - owner address
+    cell cell1 = begin_cell()
+        .store_slice(owner_address)
+        .end_cell();
+    
+    ;; Cell 2 - recipient and jetton master addresses
+    cell cell2 = begin_cell()
+        .store_slice(recipient_address)
+        .store_slice(jetton_master_address)
+        .end_cell();
+    
+    ;; Cell 3 - vesting parameters
+    cell cell3 = begin_cell()
+        .store_coins(vesting_total_amount)
+        .store_uint(packed_params, 128)
+        .store_uint(is_auto_claim, 1)
+        .store_uint(cancel_contract_permission, 3)
+        .store_uint(change_recipient_permission, 3)
+        .end_cell();
+    
+    ;; Cell 4 - claimed amount and seqno
+    cell cell4 = begin_cell()
+        .store_coins(claimed_amount)
+        .store_uint(seqno, 32)
+        .store_slice(logger_address)
+        .end_cell();
+    
+    ;; Combine all cells
+    set_data(
+        begin_cell()
+        .store_ref(cell1)
+        .store_ref(cell2)
+        .store_ref(cell3)
+        .store_ref(cell4)
+        .end_cell()
+    );
+}
+
+;; Check permission
+int check_permission(slice sender_addr, slice owner_address, slice recipient_address, int permission_type) inline {
+    if (permission_type == permission::only_owner) {
+        return equal_slices(sender_addr, owner_address);
+    } 
+    if (permission_type == permission::only_recipient) {
+        return equal_slices(sender_addr, recipient_address);
+    }
+    if (permission_type == permission::both) {
+        return equal_slices(sender_addr, owner_address) | equal_slices(sender_addr, recipient_address);
+    }
+    return 0; ;; permission::neither
+}
+
+;; Calculate unlocked amount at a specific time
+int calculate_unlocked_amount(int vesting_total_amount, int vesting_start_time, int vesting_total_duration, 
+    int unlock_period, int cliff_duration, int at_time) inline {
+    if (at_time < vesting_start_time) {
+        return 0; ;; Nothing unlocked before vesting start
+    }
+  
+    int time_passed = at_time - vesting_start_time;
+  
+    if (time_passed < cliff_duration) {
+        return 0; ;; Nothing unlocked during cliff period
+    }
+  
+    int unlock_intervals = vesting_total_duration / unlock_period;
+    int amount_per_interval = vesting_total_amount / unlock_intervals;
+  
+    int intervals_passed = (time_passed - cliff_duration) / unlock_period + 1;
+    if (intervals_passed > unlock_intervals) {
+        intervals_passed = unlock_intervals;
+    }
+  
+    int unlocked_amount = intervals_passed * amount_per_interval;
+    if (unlocked_amount > vesting_total_amount) {
+        unlocked_amount = vesting_total_amount;
+    }
+  
+    return unlocked_amount;
+}
+
+;; Calculate locked amount at a specific time
+int calculate_locked_amount(int vesting_total_amount, int vesting_start_time, int vesting_total_duration, 
+    int unlock_period, int cliff_duration, int at_time) inline {
+    int unlocked = calculate_unlocked_amount(vesting_total_amount, vesting_start_time, 
+        vesting_total_duration, unlock_period, cliff_duration, at_time);
+    return vesting_total_amount - unlocked;
+}
+
+;; Send logger message
+() send_logger_message(slice logger_address, int op, int query_id, slice data_slice1, slice data_slice2) impure inline {
+    var log_msg = begin_cell()
+        .store_uint(0x18, 6)
+        .store_slice(logger_address)
+        .store_coins(gas::logger_message)
+        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .store_uint(op, 32)
+        .store_uint(query_id, 64);
+        
+    ;; Create reference cells for log data
+    cell log_data1 = begin_cell()
+        .store_slice(data_slice1)
+        .end_cell();
+        
+    cell log_data2 = begin_cell()
+        .store_slice(data_slice2)
+        .end_cell();
+        
+    log_msg = log_msg.store_ref(log_data1).store_ref(log_data2);
+    
+    send_raw_message(log_msg.end_cell(), send_mode::pay_gas_separately);
+}
+
+() recv_external(slice in_msg) impure {
+    ;; Parse message
+    int msg_seqno = in_msg~load_uint(32);
+    int valid_until = in_msg~load_uint(32);
+    
+    ;; Load contract data
+    var (owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
+        vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
+        is_auto_claim, cancel_contract_permission, change_recipient_permission, 
+        claimed_amount, seqno, logger_address) = load_data();
+    
+    throw_unless(33, msg_seqno == seqno);
+    
+    throw_if(34, valid_until <= now());
+    
+    accept_message();
+    
+    ;; Parse operation (should be claim_unlocked)
+    int op = in_msg~load_uint(32);
+    throw_unless(error::invalid_op, op == op::claim_unlocked);
+    
+    int query_id = in_msg~load_uint(64);
+    int forward_ton_amount = in_msg~load_coins();
+    slice jetton_wallet_address = in_msg~load_msg_addr();
+
+    int unlocked_amount = calculate_unlocked_amount(vesting_total_amount, vesting_start_time, 
+        vesting_total_duration, unlock_period, cliff_duration, now());
+
+    int claimable_amount = unlocked_amount - claimed_amount;
+
+    throw_unless(error::invalid_amount, claimable_amount > 0);
+
+    ;; Create jetton transfer message - send to recipient_address
+    var msg_body = begin_cell()
+        .store_uint(op::transfer, 32)
+        .store_uint(query_id, 64)
+        .store_coins(claimable_amount)
+        .store_slice(recipient_address)
+        .store_slice(recipient_address) ;; response destination is recipient
+        .store_uint(0, 1) ;; No custom payload
+        .store_coins(forward_ton_amount)
+        .store_uint(0, 1) ;; No forward payload
+        .end_cell();
+
+    var msg = begin_cell()
+        .store_uint(0x18, 6)
+        .store_slice(jetton_wallet_address)
+        .store_coins(forward_ton_amount + gas::jetton_transfer) ;; gas
+        .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .store_ref(msg_body);
+
+    send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
+
+    claimed_amount += claimable_amount;
+    seqno += 1; ;; Increment sequence number
+
+    save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
+        vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
+        is_auto_claim, cancel_contract_permission, change_recipient_permission,
+        claimed_amount, seqno, logger_address);
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) {
+        return (); ;; Accept TON transfers (needed for gas)
+    }
+  
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+  
+    if (flags & 1) {
+        return (); ;; Ignore bounced messages
+    }
+  
+    slice sender_addr = cs~load_msg_addr();
+  
+    ;; Load contract data with updated parameters including seqno
+    var (owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
+        vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
+        is_auto_claim, cancel_contract_permission, change_recipient_permission, 
+        claimed_amount, seqno, logger_address) = load_data();
+  
+    int op = in_msg_body~load_uint(32);
+    int query_id = in_msg_body~load_uint(64);
+
+    ;; Handle cancel_vesting operation
+    if (op == op::cancel_vesting) {
+        ;; Check permission
+        throw_unless(error::access_denied, check_permission(sender_addr, owner_address, recipient_address, cancel_contract_permission));
+        
+        int forward_ton_amount = in_msg_body~load_coins();
+        slice jetton_wallet_address = in_msg_body~load_msg_addr();
+
+        ;; Calculate remaining tokens
+        int remaining_amount = vesting_total_amount - claimed_amount;
+        
+        ;; Send all remaining tokens to return_address
+        if (remaining_amount > 0) {
+            var msg_body = begin_cell()
+                .store_uint(op::transfer, 32)
+                .store_uint(query_id, 64)
+                .store_coins(remaining_amount)
+                .store_slice(sender_addr)
+                .store_slice(sender_addr) ;; response destination
+                .store_uint(0, 1) ;; No custom payload
+                .store_coins(forward_ton_amount) 
+                .store_uint(0, 1) ;; No forward payload
+                .end_cell();
+                
+            var msg = begin_cell()
+                .store_uint(0x18, 6)
+                .store_slice(jetton_wallet_address)
+                .store_coins(forward_ton_amount + gas::jetton_transfer) ;; gas
+                .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                .store_ref(msg_body);
+            
+            send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
+        }
+        
+        ;; Mark contract as terminated by setting vesting_total_amount to claimed_amount
+        save_data(owner_address, recipient_address, jetton_master_address, claimed_amount,
+            vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
+            is_auto_claim, cancel_contract_permission, change_recipient_permission, 
+            claimed_amount, seqno, logger_address);
+        
+        return ();
+    }
+
+    ;; change recipient
+    if (op == op::change_recipient) {
+        ;; Check permission
+        throw_unless(error::access_denied, 
+            check_permission(sender_addr, owner_address, recipient_address, change_recipient_permission));
+        
+        ;; Load new recipient address
+        slice new_recipient_address = in_msg_body~load_msg_addr();
+        
+        ;; Send logger message for recipient update
+        if (~ null?(logger_address)) {
+            var my_address = my_address();
+            
+            ;; Data for first reference cell: wallet address and old recipient
+            slice data_slice1 = begin_cell()
+                .store_slice(my_address)
+                .store_slice(recipient_address)
+                .end_cell()
+                .begin_parse();
+                
+            ;; Data for second reference cell: new recipient and owner
+            slice data_slice2 = begin_cell()
+                .store_slice(new_recipient_address)
+                .store_slice(owner_address)
+                .end_cell()
+                .begin_parse();
+                
+            send_logger_message(logger_address, op::update_recipient, query_id, data_slice1, data_slice2);
+        }
+        
+        ;; Update recipient
+        save_data(owner_address, new_recipient_address, jetton_master_address, vesting_total_amount,
+            vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
+            is_auto_claim, cancel_contract_permission, change_recipient_permission, 
+            claimed_amount, seqno, logger_address);
+        
+        return ();
+    }
+
+    ;; claim unlocked
+    if (op == op::claim_unlocked) {
+        ;; Check if sender is recipient
+        throw_unless(error::access_denied, equal_slices(sender_addr, recipient_address));
+        
+        int forward_ton_amount = in_msg_body~load_coins();
+        slice jetton_wallet_address = in_msg_body~load_msg_addr();
+
+        int unlocked_amount = calculate_unlocked_amount(vesting_total_amount, vesting_start_time, 
+            vesting_total_duration, unlock_period, cliff_duration, now());
+
+        int claimable_amount = unlocked_amount - claimed_amount;
+
+        throw_unless(error::invalid_amount, claimable_amount > 0);
+
+        ;; Create jetton transfer message - now sending to recipient_address
+        var msg_body = begin_cell()
+            .store_uint(op::transfer, 32)
+            .store_uint(query_id, 64)
+            .store_coins(claimable_amount)
+            .store_slice(recipient_address)
+            .store_slice(sender_addr)
+            .store_uint(0, 1)
+            .store_coins(forward_ton_amount)
+            .store_uint(0, 1)
+            .end_cell();
+            
+        var msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(jetton_wallet_address)
+            .store_coins(forward_ton_amount + gas::jetton_transfer) ;; gas
+            .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .store_ref(msg_body);
+
+        send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
+
+        claimed_amount += claimable_amount;
+
+        save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
+            vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
+            is_auto_claim, cancel_contract_permission, change_recipient_permission,
+            claimed_amount, seqno, logger_address);
+        return ();
+    }
+
+    ;; send jettons
+    if (op == op::send_jettons) {
+        ;; Check if sender is owner
+        throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
+    
+        slice to_addr = in_msg_body~load_msg_addr();
+        int jetton_amount = in_msg_body~load_coins();
+        int forward_ton_amount = in_msg_body~load_coins();
+        slice jetton_wallet_address = in_msg_body~load_msg_addr();
+
+        throw_unless(error::access_denied, equal_slices(to_addr, owner_address));
+    
+        ;; Create jetton transfer message
+        var msg_body = begin_cell()
+            .store_uint(op::transfer, 32)
+            .store_uint(query_id, 64)
+            .store_coins(jetton_amount)
+            .store_slice(to_addr)
+            .store_slice(sender_addr)
+            .store_uint(0, 1)
+            .store_coins(forward_ton_amount)
+            .store_uint(0, 1)
+            .end_cell();
+            
+        var msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(jetton_wallet_address)
+            .store_coins(forward_ton_amount + gas::jetton_transfer)
+            .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .store_ref(msg_body);
+        
+        send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
+        return ();
+    }
+    
+    ;; update owner operation
+    if (op == op::update_owner) {
+        ;; Check if sender is current owner
+        throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
+        
+        ;; Load new owner address
+        slice new_owner_address = in_msg_body~load_msg_addr();
+        
+        ;; Send logger message for owner update
+        if (~ null?(logger_address)) {
+            var my_address = my_address();
+            
+            ;; Data for first reference cell: wallet address and old owner
+            slice data_slice1 = begin_cell()
+                .store_slice(my_address)
+                .store_slice(owner_address)
+                .end_cell()
+                .begin_parse();
+                
+            ;; Data for second reference cell: new owner and recipient (keep recipient same)
+            slice data_slice2 = begin_cell()
+                .store_slice(new_owner_address)
+                .store_slice(recipient_address)
+                .end_cell()
+                .begin_parse();
+                
+            send_logger_message(logger_address, op::update_owner, query_id, data_slice1, data_slice2);
+        }
+        
+        ;; Update owner
+        save_data(new_owner_address, recipient_address, jetton_master_address, vesting_total_amount,
+            vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
+            is_auto_claim, cancel_contract_permission, change_recipient_permission, 
+            claimed_amount, seqno, logger_address);
+        
+        return ();
+    }
+  
+    ;; Unknown operation
+    throw(error::invalid_op);
+}
+
+;; Get vesting parameters
+(slice, slice, slice, int, int, int, int, int, int, int, int, int, int, slice) get_vesting_data() method_id {
+    return load_data();
+}
+
+;; Get owner address
+slice get_owner() method_id {
+    var (owner_address, _, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
+    return owner_address;
+}
+
+;; Get recipient address
+slice get_recipient() method_id {
+    var (_, recipient_address, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
+    return recipient_address;
+}
+
+;; Get cancel permission
+int get_cancel_contract_permission() method_id {
+    var (_, _, _, _, _, _, _, _, _, cancel_contract_permission, _, _, _, _) = load_data();
+    return cancel_contract_permission;
+}
+
+;; Get change recipient permission
+int get_change_recipient_permission() method_id {
+    var (_, _, _, _, _, _, _, _, _, _, change_recipient_permission, _, _, _) = load_data();
+    return change_recipient_permission;
+}
+
+;; Get auto claim flag
+int get_is_auto_claim() method_id {
+    var (_, _, _, _, _, _, _, _, is_auto_claim, _, _, _, _, _) = load_data();
+    return is_auto_claim;
+}
+
+;; Get logger address
+slice get_logger_address() method_id {
+    var (_, _, _, _, _, _, _, _, _, _, _, _, _, logger_address) = load_data();
+    return logger_address;
+}
+
+;; Check if a specific address can cancel the contract
+int can_cancel_contract(slice address) method_id {
+    var (owner_address, recipient_address, _, _, _, _, _, _, _, cancel_contract_permission, _, _, _, _) = load_data();
+    return check_permission(address, owner_address, recipient_address, cancel_contract_permission);
+}
+
+;; Check if a specific address can change the recipient
+int can_change_recipient(slice address) method_id {
+    var (owner_address, recipient_address, _, _, _, _, _, _, _, _, change_recipient_permission, _, _, _) = load_data();
+    return check_permission(address, owner_address, recipient_address, change_recipient_permission);
+}
+
+;; Get locked amount at a specific time
+int get_locked_amount(int at_time) method_id {
+    var (_, _, _, vesting_total_amount, vesting_start_time, vesting_total_duration, 
+        unlock_period, cliff_duration, _, _, _, _, _, _) = load_data();
+  
+    return calculate_locked_amount(vesting_total_amount, vesting_start_time, 
+        vesting_total_duration, unlock_period, cliff_duration, at_time);
+}
+
+;; Get unlocked amount at a specific time
+int get_unlocked_amount(int at_time) method_id {
+    var (_, _, _, vesting_total_amount, vesting_start_time, vesting_total_duration, 
+        unlock_period, cliff_duration, _, _, _, _, _, _) = load_data();
+  
+    return calculate_unlocked_amount(vesting_total_amount, vesting_start_time, 
+        vesting_total_duration, unlock_period, cliff_duration, at_time);
+}
+
+;; Get current locked amount
+int get_current_locked_amount() method_id {
+    return get_locked_amount(now());
+}
+
+;; Get current unlocked amount
+int get_current_unlocked_amount() method_id {
+    return get_unlocked_amount(now());
+}
+
+;; Get claimed amount
+int get_claimed_amount() method_id {
+    var (_, _, _, _, _, _, _, _, _, _, _, claimed_amount, _, _) = load_data();
+    return claimed_amount;
+}
+
+;; Get claimable amount
+int get_claimable_amount() method_id {
+    var (_, _, _, vesting_total_amount, vesting_start_time, vesting_total_duration, 
+        unlock_period, cliff_duration, _, _, _, claimed_amount, _, _) = load_data();
+    
+    int unlocked_amount = calculate_unlocked_amount(vesting_total_amount, vesting_start_time, 
+        vesting_total_duration, unlock_period, cliff_duration, now());
+    
+    return unlocked_amount - claimed_amount;
+}
+
+;; Get vesting total amount directly
+int get_vesting_total_amount() method_id {
+    var (_, _, _, vesting_total_amount, _, _, _, _, _, _, _, _, _, _) = load_data();
+    return vesting_total_amount;
+}
+
+int get_seqno() method_id {
+    var (_, _, _, _, _, _, _, _, _, _, _, _, seqno, _) = load_data();
+    return seqno;
+}

@@ -1,0 +1,1 @@
+slice null_addr() asm "b{00} PUSHSLICE";

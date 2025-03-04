@@ -1,0 +1,378 @@
+#include "imports/stdlib.fc";
+#include "imports/utils.fc";
+
+;; Common Operations
+const int op::create_vesting_wallet = 0x5fe9b8cd;
+
+;; Vesting Logger Operations
+const int op::register_wallet = 0xd1d1d1d1;
+const int op::set_logger_address = 0x4567;
+
+;; only owner operations
+const int op::update_vesting_wallet_code = 0x1234;
+const int op::change_owner = 0x2345;
+const int op::withdraw_tons = 0x3456;
+
+;; Error Codes
+const int error::invalid_op = 0xffff;
+const int error::access_denied = 0xffa0;
+const int error::insufficient_fee = 0xffa2;
+const int error::insufficient_balance = 0xffa3;
+
+;; Send Modes
+const int send_mode::regular = 0;
+const int send_mode::pay_gas_separately = 1;
+const int send_mode::carry_remaining_gas = 64;
+
+;; Royalty Constants
+const int royalty::fee = 10000000; ;; 0.01 TON per vesting wallet creation
+
+;; Minimum TON balance required for storage
+const int min_tons_for_storage = 10000000;
+
+;; Address size
+const int ADDRESS_SIZE = 267; ;; 256 + 8
+
+;; Helper to compare two addresses
+int equal_slices(slice a, slice b) {
+    return a.slice_hash() == b.slice_hash();
+}
+
+;; Modified Storage TL-B Scheme 
+;; storage#_ owner_address:MsgAddress ^[vesting_wallet_code:^Cell 
+;;            logger_address:MsgAddress total_wallets_created:uint64 total_royalty_collected:Coins] = Storage;
+
+(slice, cell, slice, int, int) load_data() inline {
+    var ds = get_data().begin_parse();
+    if (ds.slice_empty?()) {
+        return (null(), null(), null(), 0, 0);
+    }
+    
+    slice owner_address = ds~load_msg_addr();
+    
+    ;; Load all other data from reference cell
+    cell extra_data_cell = ds~load_ref();
+    slice extra_data = extra_data_cell.begin_parse();
+    
+    cell vesting_wallet_code = extra_data~load_ref();
+    slice logger_address = extra_data~load_msg_addr();
+    int total_wallets_created = extra_data~load_uint(64);
+    int total_royalty_collected = extra_data~load_coins();
+    
+    return (owner_address, vesting_wallet_code, logger_address, total_wallets_created, total_royalty_collected);
+}
+
+
+() save_data(slice owner_address, cell vesting_wallet_code, slice logger_address, int total_wallets_created, 
+    int total_royalty_collected) impure inline {
+    
+    ;; Create extra data cell with everything except owner address
+    cell extra_data = begin_cell()
+        .store_ref(vesting_wallet_code)
+        .store_slice(logger_address)
+        .store_uint(total_wallets_created, 64)
+        .store_coins(total_royalty_collected)
+        .end_cell();
+    
+    ;; Store main data
+    set_data(begin_cell()
+        .store_slice(owner_address)
+        .store_ref(extra_data)
+        .end_cell());
+}
+
+;; Calculate vesting wallet address from owner, params, and state init
+slice calculate_vesting_wallet_address(cell state_init) inline {
+    return begin_cell()
+        .store_uint(4, 3)
+        .store_int(0, 8)
+        .store_uint(cell_hash(state_init), 256)
+        .end_cell()
+        .begin_parse();
+}
+
+cell create_vesting_wallet_state_init(slice owner_address, slice recipient_address, slice jetton_master_address, 
+    int vesting_total_amount, int vesting_params, int is_auto_claim, 
+    int cancel_permission, int change_recipient_permission, cell wallet_code, slice logger_address) inline {
+
+    ;; Create data cell structure for vesting wallet
+    ;; First cell has owner_address only
+    cell data1 = begin_cell()
+        .store_slice(owner_address)
+        .end_cell();
+    
+    ;; Second cell has recipient and jetton master addresses
+    cell data2 = begin_cell()
+        .store_slice(recipient_address)
+        .store_slice(jetton_master_address)
+        .end_cell();
+    
+    ;; Third cell has the vesting parameters
+    cell data3 = begin_cell()
+        .store_coins(vesting_total_amount)
+        .store_uint(vesting_params, 128)
+        .store_uint(is_auto_claim, 1)
+        .store_uint(cancel_permission, 3)
+        .store_uint(change_recipient_permission, 3)
+        .end_cell();
+    
+    ;; Fourth cell for claimed amount, seqno and logger address
+    cell data4 = begin_cell()
+        .store_coins(0) ;; Initial claimed amount
+        .store_uint(0, 32) ;; Initial seqno
+        .store_slice(logger_address)
+        .end_cell();
+    
+    ;; Combine all data cells
+    cell combined_data = begin_cell()
+        .store_ref(data1)
+        .store_ref(data2)
+        .store_ref(data3)
+        .store_ref(data4)
+        .end_cell();
+    
+    return begin_cell()
+        .store_uint(0, 2)
+        .store_dict(wallet_code)
+        .store_dict(combined_data)
+        .store_uint(0, 1)
+        .end_cell();
+}
+
+() recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) {
+        return (); ;; Accept TON transfers
+    }
+    
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+    
+    if (flags & 1) {
+        return (); ;; Ignore bounced messages
+    }
+    
+    slice sender_addr = cs~load_msg_addr();
+    cs~load_coins(); ;; Skip value
+    cs~skip_bits(1); ;; Skip extracurrency collection
+    cs~load_coins(); ;; Skip ihr_fee
+    
+    int op = in_msg_body~load_uint(32);
+    int query_id = in_msg_body~load_uint(64);
+    
+    var (owner_address, vesting_wallet_code, logger_address, total_wallets_created, total_royalty_collected) = load_data();
+    
+    ;; Handle create_vesting_wallet operation with new parameters
+    if (op == op::create_vesting_wallet) {
+        throw_unless(error::insufficient_fee, msg_value >= royalty::fee);
+        throw_unless(45, ~ cell_null?(vesting_wallet_code));
+    
+        slice vesting_owner = in_msg_body~load_msg_addr();
+        slice vesting_recipient = in_msg_body~load_msg_addr();
+        slice jetton_master = in_msg_body~load_msg_addr();
+        int vesting_total_amount = in_msg_body~load_coins();
+    
+        ;; Load reference cell with remaining parameters
+        throw_unless(46, in_msg_body.slice_refs() > 0);
+        in_msg_body = in_msg_body~load_ref().begin_parse();
+    
+        int vesting_start_time = in_msg_body~load_uint(32);
+        int vesting_total_duration = in_msg_body~load_uint(32);
+        int unlock_period = in_msg_body~load_uint(32);
+        int cliff_duration = in_msg_body~load_uint(32);
+        int is_auto_claim = in_msg_body~load_uint(1);
+        int cancel_contract_permission = in_msg_body~load_uint(3);
+        int change_recipient_permission = in_msg_body~load_uint(3);
+        int forward_remaining_balance = in_msg_body~load_coins();
+        slice logger_address = in_msg_body~load_msg_addr();
+
+        throw_unless(39, vesting_start_time > 0);
+        throw_unless(40, vesting_total_duration > 0);
+        throw_unless(41, unlock_period > 0);
+        throw_unless(42, (is_auto_claim == 0) | (is_auto_claim == 1));
+        throw_unless(43, (1 <= cancel_contract_permission) & (cancel_contract_permission <= 4));
+        throw_unless(44, (1 <= change_recipient_permission) & (change_recipient_permission <= 4));
+    
+        ;; Pack vesting parameters for compact storage
+        int packed_params = (vesting_start_time << 96) | 
+        (vesting_total_duration << 64) | 
+        (unlock_period << 32) | cliff_duration;
+    
+        ;; Create state init for the vesting wallet
+        cell state_init = create_vesting_wallet_state_init(
+            vesting_owner, 
+            vesting_recipient, 
+            jetton_master, 
+            vesting_total_amount,
+            packed_params,
+            is_auto_claim,
+            cancel_contract_permission,
+            change_recipient_permission,
+            vesting_wallet_code,
+            logger_address
+        );
+        
+        ;; Calculate the address of the new vesting wallet
+        slice vesting_wallet_address = calculate_vesting_wallet_address(state_init);
+        
+        ;; Create deploy message with state init
+        var msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(vesting_wallet_address)
+            .store_coins(forward_remaining_balance) ;; Forward all remaining balance
+            .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+            .store_ref(state_init)
+            .store_ref(begin_cell().end_cell());
+        
+        send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
+        
+        ;; Send log message to logger
+        if ((~ null?(logger_address)) & (logger_address.preload_uint(2) != 0)) {
+            var log_msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(logger_address)
+            .store_coins(10000000)
+            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .store_uint(op::register_wallet, 32)
+            .store_uint(query_id, 64);
+            
+            ;; Create a reference cell for the log data
+            cell log_data = begin_cell()
+                .store_slice(vesting_wallet_address)
+                .store_slice(jetton_master)
+                .end_cell();
+                
+            ;; Create another reference cell for more log data
+            cell log_data2 = begin_cell()
+                .store_slice(vesting_owner)
+                .store_slice(vesting_recipient)
+                .store_uint(is_auto_claim, 1)
+                .end_cell();
+                
+            log_msg = log_msg.store_ref(log_data).store_ref(log_data2);
+            
+            send_raw_message(log_msg.end_cell(), send_mode::pay_gas_separately);
+        }
+
+        save_data(
+            owner_address, 
+            vesting_wallet_code,
+            logger_address,
+            total_wallets_created + 1, 
+            total_royalty_collected + royalty::fee
+        );
+        
+        return ();
+    }
+
+    if (op == op::set_logger_address) {
+        throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
+        slice new_logger = in_msg_body~load_msg_addr();
+    
+        save_data(owner_address, vesting_wallet_code, new_logger, total_wallets_created, total_royalty_collected);
+        return ();
+    }
+
+    ;; Update vesting wallet code (owner only)
+    if (op == op::update_vesting_wallet_code) {
+        throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
+        cell new_code = in_msg_body~load_ref();
+        save_data(owner_address, new_code, logger_address, total_wallets_created, total_royalty_collected);
+        return ();
+    }
+
+    ;; Change owner (owner only)
+    if (op == op::change_owner) {
+        throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
+        slice new_owner = in_msg_body~load_msg_addr();
+        save_data(new_owner, vesting_wallet_code, logger_address, total_wallets_created, total_royalty_collected);
+        return ();
+    }
+
+    ;; Withdraw excess TON (owner only)
+    if (op == op::withdraw_tons) {
+        throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
+        int withdraw_amount = in_msg_body~load_coins();
+        var [balance, _] = get_balance();
+        throw_unless(error::insufficient_balance, balance >= withdraw_amount);
+        int return_value = min(withdraw_amount, balance - min_tons_for_storage);
+
+        var msg = begin_cell()
+                .store_uint(0x10, 6)
+                .store_slice(owner_address)
+                .store_coins(return_value)
+                .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
+                
+        send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
+        return ();
+    }
+    
+    ;; Unknown operation
+    throw(error::invalid_op);
+}
+
+;; Get methods
+
+;; Returns royalty fee
+int get_royalty_fee() method_id {
+    return royalty::fee;
+}
+
+;; Returns contract owner
+slice get_owner() method_id {
+    var (owner_address, _, _, _, _) = load_data();
+    return owner_address;
+}
+
+;; Returns vesting wallet code
+cell get_wallet_code() method_id {
+    var (_, vesting_wallet_code, _, _, _) = load_data();
+    return vesting_wallet_code;
+}
+
+;; Returns stats
+(int, int) get_vesting_stats() method_id {
+    var (_, _, _, total_wallets_created, total_royalty_collected) = load_data();
+    return (total_wallets_created, total_royalty_collected);
+}
+
+;; Returns vesting wallet address for a given owner and parameters - updated with new parameters
+slice get_wallet_address(slice owner_address, slice recipient_address, slice jetton_master_address, 
+    int vesting_total_amount, int vesting_start_time, int vesting_total_duration, 
+    int unlock_period, int cliff_duration, int is_auto_claim, 
+    int cancel_contract_permission, int change_recipient_permission) method_id {
+    
+    var (_, vesting_wallet_code, logger_address, _, _) = load_data();
+    
+    ;; Check if wallet code is available
+    if (cell_null?(vesting_wallet_code)) {
+        return null_addr();
+    }
+    
+    ;; Pack vesting parameters for compact storage
+    int packed_params = (vesting_start_time << 96) | 
+    (vesting_total_duration << 64) | 
+    (unlock_period << 32) | 
+                       cliff_duration;
+    
+    ;; Create state init for the vesting wallet
+    cell state_init = create_vesting_wallet_state_init(
+        owner_address,
+        recipient_address,
+        jetton_master_address,
+        vesting_total_amount,
+        packed_params,
+        is_auto_claim,
+        cancel_contract_permission,
+        change_recipient_permission,
+        vesting_wallet_code,
+        logger_address
+    );
+    
+    ;; Calculate the address of the vesting wallet
+    return calculate_vesting_wallet_address(state_init);
+}
+
+slice get_logger_address() method_id {
+    var (_, _, logger_address, _, _) = load_data();
+    return logger_address;
+}
