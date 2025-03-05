@@ -2,8 +2,7 @@ import { Address } from '@ton/core';
 import { NetworkProvider } from '@ton/blueprint';
 import { VestingLogger } from '../../wrappers/VestingLogger';
 
-const LOGGER_CONTRACT_ADDRESS = "EQDwtJ3ddneadY69XbHSz02DWAsbB7Hyziiyegn1arlEEuOu";
-const JETTON_MASTER_ADDRESS = "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
+const LOGGER_CONTRACT_ADDRESS = "EQAz-F2lqF_cUvItPh6m44psJJ-oCQnrJB8YxVLtmad3Kbg_";
 
 export async function run(provider: NetworkProvider) {
   try {
@@ -12,20 +11,14 @@ export async function run(provider: NetworkProvider) {
     const loggerAddress = Address.parse(LOGGER_CONTRACT_ADDRESS);
     const vestingLogger = provider.open(VestingLogger.createFromAddress(loggerAddress));
     
-    const tokenWallets = await vestingLogger.getTokenWallets(Address.parse(JETTON_MASTER_ADDRESS));
+    const tokenWalletsOld = await vestingLogger.getTokenWallets(provider.sender().address!);
+    const tokenWalletsNew = await vestingLogger.getTokenWallets(Address.parse("0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5"));
     
     console.log('\n===== VESTING TOKEN WALLETS =====');
     console.log('Contract Address:', loggerAddress.toString());
-    console.log("Token Master Address:", JETTON_MASTER_ADDRESS);
-    console.log('Token Wallets:', tokenWallets.toString());
+    console.log('Token Wallets Old:', tokenWalletsOld);
+    console.log('Token Wallets New:', tokenWalletsNew);
     
-    return {
-      success: true,
-      data: {
-        address: loggerAddress.toString(),
-        tokenWallets: tokenWallets.toString(),
-      }
-    };
   } catch (error) {
     console.error('Error fetching token wallets:', error);
     throw error;

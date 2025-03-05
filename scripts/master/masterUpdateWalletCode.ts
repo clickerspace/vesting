@@ -2,7 +2,7 @@ import { Address } from '@ton/core';
 import { VestingMaster } from '../../wrappers/VestingMaster';
 import { compile, NetworkProvider } from '@ton/blueprint';
 
-const MASTER_CONTRACT_ADDRESS = "EQA6j1bC_3rs8NZ8s4bBeHYhuJNqJwqnlmUtreIEfszsd0kB";
+const MASTER_CONTRACT_ADDRESS = "EQAJZlUIKzIQiYWvC004khWWxn63QYzHrifpwEsn8we9Y9nx";
 
 const NEW_WALLET_CODE_PATH = "VestingWallet"; 
 
@@ -22,7 +22,7 @@ export async function run(provider: NetworkProvider) {
     const newCode = await compile(NEW_WALLET_CODE_PATH);
     
     console.log('Sending update wallet code transaction...');
-    const result = await vestingMaster.sendUpdateWalletCode(
+    await vestingMaster.sendUpdateWalletCode(
       provider.sender(),
       newCode
     );

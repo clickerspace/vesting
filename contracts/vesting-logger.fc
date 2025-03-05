@@ -97,38 +97,41 @@ int equal_slices(slice a, slice b) {
         .end_cell());
 }
 
-;; Add wallet to a specific index
+;; Add wallet to a simple address index
 cell add_to_index(cell index_dict, slice key_address, slice wallet_address) inline {
+    ;; Parse addresses
     (int key_wc, int key_hash) = parse_std_addr(key_address);
+    (int wallet_wc, int wallet_hash) = parse_std_addr(wallet_address);
     
-    ;; Get or create inner dictionary
-    (slice value_slice, int found) = index_dict.udict_get?(267, key_hash);
+    ;; Use hash part as dictionary key
+    (slice value_slice, int found) = index_dict.udict_get?(256, key_hash);
     cell inner_dict = found ? value_slice.preload_ref() : new_dict();
     
-    ;; Add wallet to inner dictionary
-    (int wallet_wc, int wallet_hash) = parse_std_addr(wallet_address);
-    inner_dict~udict_set_builder(267, wallet_hash, begin_cell().store_int(-1, 1));
+    ;; Store full address slice as a value
+    builder wallet_builder = begin_cell().store_slice(wallet_address);
+    inner_dict~udict_set_ref(256, wallet_hash, wallet_builder.end_cell());
     
     ;; Update outer dictionary
-    return index_dict.udict_set_ref(267, key_hash, inner_dict);
+    return index_dict.udict_set_ref(256, key_hash, inner_dict);
 }
 
 ;; Remove wallet from a specific index
 cell remove_from_index(cell index_dict, slice key_address, slice wallet_address) inline {
+    ;; Parse addresses
     (int key_wc, int key_hash) = parse_std_addr(key_address);
+    (int wallet_wc, int wallet_hash) = parse_std_addr(wallet_address);
     
     ;; Get inner dictionary
-    (slice value_slice, int found) = index_dict.udict_get?(267, key_hash);
+    (slice value_slice, int found) = index_dict.udict_get?(256, key_hash);
     
     if (found) {
         cell inner_dict = value_slice.preload_ref();
-        (int wallet_wc, int wallet_hash) = parse_std_addr(wallet_address);
         
         ;; Remove wallet from inner dictionary
-        (_, int was_found) = inner_dict.udict_delete?(267, wallet_hash);
+        (_, int was_found) = inner_dict.udict_delete?(256, wallet_hash);
         
         ;; Update outer dictionary
-        return index_dict.udict_set_ref(267, key_hash, inner_dict);
+        return index_dict.udict_set_ref(256, key_hash, inner_dict);
     }
     
     return index_dict;
@@ -200,7 +203,8 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
         ;; Convert any non-zero value to 1 for consistency
         if (is_auto_claim == 1) {
             (int wallet_wc, int wallet_hash) = parse_std_addr(wallet_address);
-            storage::auto_claim_wallets~udict_set_builder(267, wallet_hash, begin_cell().store_int(-1, 1));
+            builder wallet_builder = begin_cell().store_slice(wallet_address);
+            storage::auto_claim_wallets~udict_set_ref(256, wallet_hash, wallet_builder.end_cell());
         }
         
         save_data();
@@ -288,8 +292,8 @@ cell get_token_wallets(slice token_address) method_id {
         return new_dict();
     }
     
-    (int wc, int addr_hash) = parse_std_addr(token_address);
-    (slice token_list_slice, int token_found) = storage::token_wallets.udict_get?(267, addr_hash);
+    (int token_wc, int token_hash) = parse_std_addr(token_address);
+    (slice token_list_slice, int token_found) = storage::token_wallets.udict_get?(256, token_hash);
     
     if (~ token_found) {
         return new_dict();
@@ -306,8 +310,8 @@ cell get_owner_wallets(slice owner_address) method_id {
         return new_dict();
     }
     
-    (int wc, int addr_hash) = parse_std_addr(owner_address);
-    (slice owner_list_slice, int owner_found) = storage::owner_wallets.udict_get?(267, addr_hash);
+    (int owner_wc, int owner_hash) = parse_std_addr(owner_address);
+    (slice owner_list_slice, int owner_found) = storage::owner_wallets.udict_get?(256, owner_hash);
     
     if (~ owner_found) {
         return new_dict();
@@ -324,8 +328,8 @@ cell get_receiver_wallets(slice receiver_address) method_id {
         return new_dict();
     }
     
-    (int wc, int addr_hash) = parse_std_addr(receiver_address);
-    (slice receiver_list_slice, int receiver_found) = storage::receiver_wallets.udict_get?(267, addr_hash);
+    (int receiver_wc, int receiver_hash) = parse_std_addr(receiver_address);
+    (slice receiver_list_slice, int receiver_found) = storage::receiver_wallets.udict_get?(256, receiver_hash);
     
     if (~ receiver_found) {
         return new_dict();

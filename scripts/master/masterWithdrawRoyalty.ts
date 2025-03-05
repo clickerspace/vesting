@@ -2,8 +2,8 @@ import { Address, toNano, fromNano } from '@ton/core';
 import { VestingMaster } from '../../wrappers/VestingMaster';
 import { NetworkProvider } from '@ton/blueprint';
 
-const MASTER_CONTRACT_ADDRESS = "EQA6j1bC_3rs8NZ8s4bBeHYhuJNqJwqnlmUtreIEfszsd0kB";
-const WITHDRAW_AMOUNT = "";
+const MASTER_CONTRACT_ADDRESS = "EQAJZlUIKzIQiYWvC004khWWxn63QYzHrifpwEsn8we9Y9nx";
+const WITHDRAW_AMOUNT = "0.05";
 
 export async function run(provider: NetworkProvider) {
   try {

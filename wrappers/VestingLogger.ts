@@ -5,6 +5,7 @@ import {
   Contract,
   contractAddress,
   ContractProvider,
+  Dictionary,
   Sender,
   SendMode,
   toNano,
@@ -111,10 +112,25 @@ export class VestingLogger implements Contract {
       const result = await provider.get("get_token_wallets", [
         { type: "slice", cell: beginCell().storeAddress(tokenAddress).endCell() },
       ]);
-      return result.stack.readCell();
+      const dictCell = result.stack.readCell();
+      const dict = Dictionary.loadDirect(
+        Dictionary.Keys.BigUint(256),
+        Dictionary.Values.Cell(),
+        dictCell
+      );
+      const readableWallets = [];
+      const keys = dict.keys();
+      for (const key of keys) {
+        const valueCell = dict.get(key);
+        if (valueCell) {
+          const slice = valueCell.beginParse();
+          readableWallets.push(slice.loadAddress().toString());
+        }
+      }
+      return readableWallets;
     } catch (error) {
       console.error("Error in getTokenWallets:", error);
-      return beginCell().endCell(); // Return empty cell on error
+      return [];
     }
   }
 
@@ -124,14 +140,28 @@ export class VestingLogger implements Contract {
       const result = await provider.get("get_owner_wallets", [
         { type: "slice", cell: beginCell().storeAddress(ownerAddress).endCell() },
       ]);
-      return result.stack.readCell();
+      const dictCell = result.stack.readCell();
+      const dict = Dictionary.loadDirect(
+        Dictionary.Keys.BigUint(256),
+        Dictionary.Values.Cell(),
+        dictCell
+      );
+      const readableWallets = [];
+      const keys = dict.keys();
+      for (const key of keys) {
+        const valueCell = dict.get(key);
+        if (valueCell) {
+          const slice = valueCell.beginParse();
+          readableWallets.push(slice.loadAddress().toString());
+        }
+      }
+      return readableWallets;
     } catch (error) {
       console.error("Error in getOwnerWallets:", error);
-      return beginCell().endCell();
+      return [];
     }
   }
 
-  // Get all wallets for a receiver
   async getReceiverWallets(
     provider: ContractProvider,
     receiverAddress: Address
@@ -143,10 +173,35 @@ export class VestingLogger implements Contract {
           cell: beginCell().storeAddress(receiverAddress).endCell(),
         },
       ]);
-      return result.stack.readCell();
+  
+      const dictCell = result.stack.readCell();
+      
+      const dict = Dictionary.loadDirect(
+        Dictionary.Keys.BigUint(256),
+        Dictionary.Values.Cell(),
+        dictCell
+      );
+
+      const readableWallets = [];
+      const keys = dict.keys();
+      
+      for (const key of keys) {
+        const valueCell = dict.get(key);
+        if (valueCell) {
+          const slice = valueCell.beginParse();
+          try {
+            const address = slice.loadAddress();
+            readableWallets.push(address.toString());
+          } catch (error) {
+            console.warn("Adres yüklenirken hata:", error);
+          }
+        }
+      }
+      
+      return readableWallets;
     } catch (error) {
       console.error("Error in getReceiverWallets:", error);
-      return beginCell().endCell();
+      return [];
     }
   }
 
@@ -154,10 +209,33 @@ export class VestingLogger implements Contract {
   async getAutoClaimWallets(provider: ContractProvider) {
     try {
       const result = await provider.get("get_auto_claim_wallets", []);
-      return result.stack.readCell();
+      const dictCell = result.stack.readCell();
+      const dict = Dictionary.loadDirect(
+        Dictionary.Keys.BigUint(256),
+        Dictionary.Values.Cell(),
+        dictCell
+      );
+      
+      const readableWallets = [];
+      const keys = dict.keys();
+      
+      for (const key of keys) {
+        const valueCell = dict.get(key);
+        if (valueCell) {
+          const slice = valueCell.beginParse();
+          try {
+            const address = slice.loadAddress();
+            readableWallets.push(address.toString());
+          } catch (error) {
+            console.warn("Adres yüklenirken hata:", error);
+          }
+        }
+      }
+      
+      return readableWallets;
     } catch (error) {
       console.error("Error in getAutoClaimWallets:", error);
-      return beginCell().endCell();
+      return [];
     }
   }
 

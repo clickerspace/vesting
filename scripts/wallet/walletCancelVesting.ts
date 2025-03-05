@@ -2,7 +2,7 @@ import { Address, toNano } from '@ton/core';
 import { VestingWallet } from '../../wrappers/VestingWallet';
 import { NetworkProvider } from '@ton/blueprint';
 
-const WALLET_CONTRACT_ADDRESS = "EQBJ7lGxxA2Usi1yEv3t_0ZbDQA1nuWmOpyT_K0S8WVJzrYi";
+const WALLET_CONTRACT_ADDRESS = "EQBl_6VCdlc5riYJvI6gddQCJtwyioTJiQLDSmhJDD5vGEXz";
 
 export async function run(provider: NetworkProvider) {
   try {
@@ -11,7 +11,7 @@ export async function run(provider: NetworkProvider) {
     
     let jettonWalletAddress = Address.parse("EQBdrXrlWC9d8OmySn41pi17kp0QoWTMJQl6YcT1DDuqDyZj");
     
-    const forwardTonAmount = toNano('0.5');
+    const forwardTonAmount = toNano('0.1');
     await vestingWallet.cancelVesting(
       provider.provider(walletAddress),
       provider.sender(),

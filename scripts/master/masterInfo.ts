@@ -2,7 +2,7 @@ import { Address, fromNano } from '@ton/core';
 import { VestingMaster } from '../../wrappers/VestingMaster';
 import { NetworkProvider } from '@ton/blueprint';
 
-const MASTER_CONTRACT_ADDRESS = "EQA6j1bC_3rs8NZ8s4bBeHYhuJNqJwqnlmUtreIEfszsd0kB";
+const MASTER_CONTRACT_ADDRESS = "EQAJZlUIKzIQiYWvC004khWWxn63QYzHrifpwEsn8we9Y9nx";
 
 export async function run(provider: NetworkProvider) {
   try {
@@ -23,6 +23,11 @@ export async function run(provider: NetworkProvider) {
     console.log('Royalty Fee:', fromNano(royaltyFee), 'TON');
     console.log('Total Wallets Created:', stats.totalWalletsCreated);
     console.log('Total Royalty Collected:', fromNano(stats.totalRoyaltyCollected), 'TON');
+
+    const address2 = Address.parse('0:A160039FAE137685D3591B58554D050DE54A0F064CDD66BE18A352F96C8D65D50F57F20073F5C26ED0BA6B236B0AA9A0A1BCA941E0C99BACD7C3146A5F2D91ACBAA1EAFE4_');
+    console.log("aaa: ", address2.toString());
+    console.log("bbb: ", address2.toRawString());
+    
     
     return {
       success: true,
