@@ -128,10 +128,19 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
         cell inner_dict = value_slice.preload_ref();
         
         ;; Remove wallet from inner dictionary
-        (_, int was_found) = inner_dict.udict_delete?(256, wallet_hash);
+        (inner_dict, int was_found) = inner_dict.udict_delete?(256, wallet_hash);
         
-        ;; Update outer dictionary
-        return index_dict.udict_set_ref(256, key_hash, inner_dict);
+        ;; Check if inner dictionary is empty
+        int dict_empty = dict_empty?(inner_dict);
+        
+        if (dict_empty) {
+            ;; If inner dictionary is empty, remove the key from outer dictionary
+            (cell new_dict, int deleted) = index_dict.udict_delete?(256, key_hash);
+            return new_dict;
+        } else {
+            ;; Update outer dictionary with modified inner dictionary
+            return index_dict.udict_set_ref(256, key_hash, inner_dict);
+        }
     }
     
     return index_dict;
@@ -354,3 +363,4 @@ slice get_owner() method_id {
     load_data();
     return storage::owner;
 }
+

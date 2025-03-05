@@ -2,7 +2,7 @@ import { Address } from '@ton/core';
 import { NetworkProvider } from '@ton/blueprint';
 import { VestingLogger } from '../../wrappers/VestingLogger';
 
-const LOGGER_CONTRACT_ADDRESS = "EQAz-F2lqF_cUvItPh6m44psJJ-oCQnrJB8YxVLtmad3Kbg_";
+const LOGGER_CONTRACT_ADDRESS = "EQDurP3s_oCplwWVYpZiSEqLqdyuvgsJyLHX7eLLHOgnC272";
 const JETTON_MASTER_ADDRESS = "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
 
 export async function run(provider: NetworkProvider) {
@@ -17,14 +17,22 @@ export async function run(provider: NetworkProvider) {
     const ownerWallets = await vestingLogger.getOwnerWallets(provider.sender().address!);
     const receiverWallets = await vestingLogger.getReceiverWallets(provider.sender().address!);
     const autoClaimWallets = await vestingLogger.getAutoClaimWallets();
+
+   
+    const ownerWalletsNew = await vestingLogger.getOwnerWallets(Address.parse("UQBsQBAHy5FOWkOHrLDGDwlpEOhDerGg73Hb0RNTiJDpmiBM"));
+    const receiverWalletsNew = await vestingLogger.getReceiverWallets(Address.parse("UQBsQBAHy5FOWkOHrLDGDwlpEOhDerGg73Hb0RNTiJDpmiBM"));
     
     console.log('\n===== VESTING LOGGER INFORMATION =====');
     console.log('Contract Address:', loggerAddress.toString());
     console.log('Owner Address:', owner.toString());
+    console.log("----")
     console.log('Token Wallets:', tokenWallets);
     console.log('Owner Wallets:', ownerWallets);
     console.log('Receiver Wallets:', receiverWallets);
     console.log('Auto Claim Wallets:', autoClaimWallets);
+    console.log("----")
+    console.log('Owner Wallets New:', ownerWalletsNew);
+    console.log('Receiver Wallets New:', receiverWalletsNew);
     
   } catch (error) {
     console.error('Error fetching logger information:', error);

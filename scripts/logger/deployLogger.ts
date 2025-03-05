@@ -10,6 +10,7 @@ export async function run(provider: NetworkProvider) {
       VestingLogger.createFromConfig(
         {
           owner_address: provider.sender().address!,
+          deploy_time: Math.floor(Date.now() / 1000) 
         },
         await compile("VestingLogger")
       )

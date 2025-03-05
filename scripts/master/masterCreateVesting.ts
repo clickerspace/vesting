@@ -2,9 +2,9 @@ import { Address, toNano, fromNano } from "@ton/core";
 import { VestingMaster } from "../../wrappers/VestingMaster";
 import { NetworkProvider } from "@ton/blueprint";
 
-const MASTER_CONTRACT_ADDRESS = "EQAJZlUIKzIQiYWvC004khWWxn63QYzHrifpwEsn8we9Y9nx";
+const MASTER_CONTRACT_ADDRESS = "EQCmw9L6bWR94fDeqTJsyVp8LWJ5l-zQeSosAeA2Rjp2kAnY";
 const JETTON_MASTER_ADDRESS = "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
-const LOGGER_CONTRACT_ADDRESS = "EQAz-F2lqF_cUvItPh6m44psJJ-oCQnrJB8YxVLtmad3Kbg_";
+const LOGGER_CONTRACT_ADDRESS = "EQDurP3s_oCplwWVYpZiSEqLqdyuvgsJyLHX7eLLHOgnC272";
 
 const CUSTOM_PARAMS = {
   START_DELAY: 60, // 1 minute
@@ -50,11 +50,11 @@ export async function run(provider: NetworkProvider) {
     const totalDuration = CUSTOM_PARAMS.TOTAL_DURATION;
     const unlockPeriod = CUSTOM_PARAMS.UNLOCK_PERIOD;
     const cliffDuration = CUSTOM_PARAMS.CLIFF_DURATION;
-    const isAutoClaim = 1; // 0 = no auto claim, 1 = auto claim
-    const cancelContractPermission = 2; // 1 = only_recipient, 2 = only_owner, 3 = both, 4 = neither
-    const changeRecipientPermission = 2; // 1 = only_recipient, 2 = only_owner, 3 = both, 4 = neither
+    const isAutoClaim = 0; // 0 = no auto claim, 1 = auto claim
+    const cancelContractPermission = 1; // 1 = only_recipient, 2 = only_owner, 3 = both, 4 = neither
+    const changeRecipientPermission = 1; // 1 = only_recipient, 2 = only_owner, 3 = both, 4 = neither
     const ownerAddress = provider.sender().address!;
-    const recipientAddress = provider.sender().address!;
+    const recipientAddress = Address.parse("0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5");
 
     const walletAddress = await vestingMaster.getWalletAddress(
       ownerAddress,

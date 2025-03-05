@@ -18,10 +18,13 @@ export const VestingLoggerOpcodes = {
 
 export type VestingLoggerConfig = {
   owner_address: Address;
+  deploy_time: number;
 };
 
 export function vestingLoggerConfigToCell(config: VestingLoggerConfig): Cell {
-  return beginCell().storeAddress(config.owner_address).endCell();
+  return beginCell().storeAddress(config.owner_address)
+  .storeUint(config.deploy_time, 32)
+  .endCell();
 }
 
 export class VestingLogger implements Contract {
