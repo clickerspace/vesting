@@ -2,8 +2,8 @@ import { Address, fromNano, toNano } from '@ton/core';
 import { VestingWallet } from '../../wrappers/VestingWallet';
 import { NetworkProvider } from '@ton/blueprint';
 
-const WALLET_CONTRACT_ADDRESS = "EQDgbLnGjOq4TF331_sWugM2ea_H19fJvsBRPVKHlAO7bKFJ";
-const WALLET_JETTON_ADDRESS = "EQDBY2HDZUDSVH-TO7OCZNXpfXdNtBaI4aJsgBOGTlsguN-V";
+const WALLET_CONTRACT_ADDRESS = "EQB2_LsH_YzjC0lGVG97IKwWLxeN1RmYh4r3aUKIZyxpitoC";
+const WALLET_JETTON_ADDRESS = "EQAKTxgtOaizaI_QNammT20sb2v0j8-wvbJULduGoKUqNiuc";
 
 export async function run(provider: NetworkProvider) {
   try {
@@ -23,14 +23,22 @@ export async function run(provider: NetworkProvider) {
     
     let jettonWalletAddress = Address.parse(WALLET_JETTON_ADDRESS);
     
+    // Get the current seqno
+    const seqno = await vestingWallet.getSeqno();
+    console.log(`Current seqno: ${seqno}`);
+    
+    // Set expiration time to 5 minutes from now
+    const validUntil = Math.floor(Date.now() / 1000) + 5 * 60;
+    console.log(`Message valid until: ${new Date(validUntil * 1000).toISOString()}`);
+    
     const forwardTonAmount = toNano('0.1');
     await vestingWallet.sendClaimUnlockedExternal(
-        0,
-        1741271008,
-      {
-        forwardTonAmount,
-        jettonWalletAddress
-      }
+        seqno,
+        validUntil,
+        {
+          forwardTonAmount,
+          jettonWalletAddress
+        }
     );
     
     console.log('Claim transaction sent successfully!');

@@ -2,10 +2,11 @@ import { Address, toNano } from '@ton/core';
 import { VestingWallet } from '../../wrappers/VestingWallet';
 import { NetworkProvider } from '@ton/blueprint';
 
-const WALLET_CONTRACT_ADDRESS = "EQDgbLnGjOq4TF331_sWugM2ea_H19fJvsBRPVKHlAO7bKFJ";
+const WALLET_CONTRACT_ADDRESS = "EQB2_LsH_YzjC0lGVG97IKwWLxeN1RmYh4r3aUKIZyxpitoC";
 const RECIPIENT_ADDRESS = "0QARfBT9PMJ_TjX8bUqFvI-ZMqixM7kY68_-7tmVm-khfOyj";
+const WALLET_JETTON_ADDRESS = "EQAKTxgtOaizaI_QNammT20sb2v0j8-wvbJULduGoKUqNiuc";
 
-const TOKEN_AMOUNT = "50";
+const TOKEN_AMOUNT = 50;
 
 export async function run(provider: NetworkProvider) {
   try {
@@ -17,14 +18,13 @@ export async function run(provider: NetworkProvider) {
     
     const vestingWallet = provider.open(VestingWallet.createFromAddress(walletAddress));
     
-    let jettonWalletAddress = Address.parse("EQBuor-j5UJTYxyPO7d3mHXdoJSK-8XrszCxmym3cfw2WFMu");
     
-    const forwardAmount = toNano('0.05');
+    const forwardAmount = toNano('0.1');
     await vestingWallet.sendJettons(provider.sender(), {
-      toAddress: recipientAddress,
+      toAddress: provider.sender().address!,
       jettonAmount: amount,
       forwardTonAmount: forwardAmount,
-      jettonWalletAddress
+      jettonWalletAddress: Address.parse(WALLET_JETTON_ADDRESS)
     });
     
     console.log('Token transfer transaction sent successfully!');

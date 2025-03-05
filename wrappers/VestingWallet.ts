@@ -211,10 +211,9 @@ export class VestingWallet implements Contract {
     }
   ) {
     const queryId = 1n;
-    const value = opts.forwardTonAmount + toNano("0.05");
 
     return await provider.internal(via, {
-      value,
+      value: toNano("0.3"),
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell()
         .storeUint(VestingWalletOpcodes.send_jettons, 32)
@@ -239,7 +238,7 @@ export class VestingWallet implements Contract {
     const queryId = 2n;
 
     return await provider.internal(via, {
-      value: toNano("0.2"),
+      value: toNano("0.3"),
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell()
         .storeUint(VestingWalletOpcodes.claim_unlocked, 32)

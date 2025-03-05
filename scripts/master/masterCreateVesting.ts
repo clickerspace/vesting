@@ -2,9 +2,9 @@ import { Address, toNano, fromNano } from "@ton/core";
 import { VestingMaster } from "../../wrappers/VestingMaster";
 import { NetworkProvider } from "@ton/blueprint";
 
-const MASTER_CONTRACT_ADDRESS = "EQCmw9L6bWR94fDeqTJsyVp8LWJ5l-zQeSosAeA2Rjp2kAnY";
+const MASTER_CONTRACT_ADDRESS = "EQCQzF1rwoULP2Ne6NWAsqbSzIoHEK3mVrLv9B3TZ6vPGtfC";
 const JETTON_MASTER_ADDRESS = "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
-const LOGGER_CONTRACT_ADDRESS = "EQDurP3s_oCplwWVYpZiSEqLqdyuvgsJyLHX7eLLHOgnC272";
+const LOGGER_CONTRACT_ADDRESS = "EQBz4a1gZCUZCLlPD_XgLY84PDdfZ6mfE64vHa0RuNXjeEOO";
 
 const CUSTOM_PARAMS = {
   START_DELAY: 60, // 1 minute
@@ -94,7 +94,7 @@ export async function run(provider: NetworkProvider) {
     await vestingMaster.sendCreateVestingWallet(
       provider.sender(),
       {
-        value: royaltyFee + toNano("0.1"),
+        value: royaltyFee + toNano("0.2"),
         owner: ownerAddress,
         recipient: recipientAddress,
         jettonMaster: jettonMaster,
@@ -106,7 +106,7 @@ export async function run(provider: NetworkProvider) {
         isAutoClaim: isAutoClaim,
         cancelContractPermission: cancelContractPermission,
         changeRecipientPermission: changeRecipientPermission,
-        forwardRemainingBalance: toNano("0.1"),
+        forwardRemainingBalance: toNano("0.2"),
         loggerAddress: Address.parse(LOGGER_CONTRACT_ADDRESS)
       }
     );

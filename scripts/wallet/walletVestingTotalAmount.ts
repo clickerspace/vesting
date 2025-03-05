@@ -2,7 +2,7 @@ import { Address } from "@ton/core";
 import { VestingWallet } from "../../wrappers/VestingWallet";
 import { NetworkProvider } from "@ton/blueprint";
 
-const WALLET_CONTRACT_ADDRESS = "EQDgbLnGjOq4TF331_sWugM2ea_H19fJvsBRPVKHlAO7bKFJ";
+const WALLET_CONTRACT_ADDRESS = "EQB2_LsH_YzjC0lGVG97IKwWLxeN1RmYh4r3aUKIZyxpitoC";
 
 export async function run(provider: NetworkProvider) {
   const walletAddress = Address.parse(WALLET_CONTRACT_ADDRESS);

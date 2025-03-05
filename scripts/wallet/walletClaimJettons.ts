@@ -2,8 +2,8 @@ import { Address, fromNano, toNano } from '@ton/core';
 import { VestingWallet } from '../../wrappers/VestingWallet';
 import { NetworkProvider } from '@ton/blueprint';
 
-const WALLET_CONTRACT_ADDRESS = "EQDgbLnGjOq4TF331_sWugM2ea_H19fJvsBRPVKHlAO7bKFJ";
-const WALLET_JETTON_ADDRESS = "EQDBY2HDZUDSVH-TO7OCZNXpfXdNtBaI4aJsgBOGTlsguN-V";
+const WALLET_CONTRACT_ADDRESS = "EQB2_LsH_YzjC0lGVG97IKwWLxeN1RmYh4r3aUKIZyxpitoC";
+const WALLET_JETTON_ADDRESS = "EQAKTxgtOaizaI_QNammT20sb2v0j8-wvbJULduGoKUqNiuc";
 
 export async function run(provider: NetworkProvider) {
   try {
@@ -23,7 +23,7 @@ export async function run(provider: NetworkProvider) {
     
     let jettonWalletAddress = Address.parse(WALLET_JETTON_ADDRESS);
     
-    const forwardTonAmount = toNano('0.1');
+    const forwardTonAmount = toNano('0.3');
     await vestingWallet.claimUnlocked(
       provider.provider(walletAddress),
       provider.sender(),

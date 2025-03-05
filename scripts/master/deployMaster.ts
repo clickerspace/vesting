@@ -2,7 +2,7 @@ import { toNano, fromNano, Address } from '@ton/core';
 import { VestingMaster } from '../../wrappers/VestingMaster';
 import { compile, NetworkProvider } from '@ton/blueprint';
 
-const LOGGER_CONTRACT_ADDRESS = "EQDurP3s_oCplwWVYpZiSEqLqdyuvgsJyLHX7eLLHOgnC272";
+const LOGGER_CONTRACT_ADDRESS = "EQBz4a1gZCUZCLlPD_XgLY84PDdfZ6mfE64vHa0RuNXjeEOO";
 
 export async function run(provider: NetworkProvider) {
   try {
@@ -21,7 +21,7 @@ export async function run(provider: NetworkProvider) {
       await compile('VestingMaster'))
     );
     
-    const DEPLOY_AMOUNT = toNano('0.05');
+    const DEPLOY_AMOUNT = toNano('0.1');
 
     console.log('Deploying Vesting Master contract...');
     console.log('Contract address:', vestingMaster.address.toString());
