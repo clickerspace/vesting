@@ -27,7 +27,7 @@ export const DEFAULT_JETTON_MASTER =
   "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
 
 export const VestingWalletOpcodes = {
-  send_jettons: 0x7777,
+  withdraw_jettons: 0x7777,
   claim_unlocked: 0x8888,
   cancel_vesting: 0x9999,
   change_recipient: 0xaaaa,
@@ -216,7 +216,7 @@ export class VestingWallet implements Contract {
       value: toNano("0.3"),
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell()
-        .storeUint(VestingWalletOpcodes.send_jettons, 32)
+        .storeUint(VestingWalletOpcodes.withdraw_jettons, 32)
         .storeUint(queryId, 64)
         .storeAddress(opts.toAddress)
         .storeCoins(opts.jettonAmount)

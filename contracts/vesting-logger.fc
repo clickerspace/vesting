@@ -39,11 +39,9 @@ int equal_slices(slice a, slice b) {
         return ();
     }
     
-    ;; Load owner address
     storage::owner = ds~load_msg_addr();
     storage::init? = true;
     
-    ;; Check if we have more data
     if (ds.slice_refs() < 1) {
         storage::token_wallets = new_dict();
         storage::owner_wallets = new_dict();
@@ -52,10 +50,8 @@ int equal_slices(slice a, slice b) {
         return ();
     }
     
-    ;; Load token wallets dictionary
     storage::token_wallets = ds~load_dict();
     
-    ;; Check if we have more refs
     if (ds.slice_refs() < 1) {
         storage::owner_wallets = new_dict();
         storage::receiver_wallets = new_dict();
@@ -63,26 +59,21 @@ int equal_slices(slice a, slice b) {
         return ();
     }
     
-    ;; Load owner wallets dictionary
     storage::owner_wallets = ds~load_dict();
     
-    ;; Check if we have more refs
     if (ds.slice_refs() < 1) {
         storage::receiver_wallets = new_dict();
         storage::auto_claim_wallets = new_dict();
         return ();
     }
     
-    ;; Load receiver wallets dictionary
     storage::receiver_wallets = ds~load_dict();
     
-    ;; Check if we have the final ref
     if (ds.slice_refs() < 1) {
         storage::auto_claim_wallets = new_dict();
         return ();
     }
     
-    ;; Load auto claim wallets dictionary
     storage::auto_claim_wallets = ds~load_dict();
 }
 
@@ -193,7 +184,6 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
         receiver_address = log_data2_cs~load_msg_addr();
         is_auto_claim = log_data2_cs~load_uint(1);
             
-        ;; Validate that we have all required addresses
         throw_unless(error::invalid_data, ~ null?(wallet_address));
         throw_unless(error::invalid_data, ~ null?(token_address));
         throw_unless(error::invalid_data, ~ null?(wallet_owner_address));
@@ -208,8 +198,7 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
         ;; Update receiver -> wallets mapping
         storage::receiver_wallets = add_to_index(storage::receiver_wallets, receiver_address, wallet_address);
         
-        ;; Update auto claim list if needed
-        ;; Convert any non-zero value to 1 for consistency
+        ;; Update auto claim list
         if (is_auto_claim == 1) {
             (int wallet_wc, int wallet_hash) = parse_std_addr(wallet_address);
             builder wallet_builder = begin_cell().store_slice(wallet_address);
@@ -220,7 +209,7 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
         return ();
     }
     
-    ;; update_recipient (from wallet contract)
+    ;; update_recipient (from vesting wallet contract)
     if (op == op::update_recipient) {
         cell log_data1 = in_msg_body~load_ref();
         slice log_data1_cs = log_data1.begin_parse();
@@ -244,7 +233,7 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
         return ();
     }
     
-    ;; update_owner (from wallet contract)
+    ;; update_owner (from vesting wallet contract)
     if (op == op::update_owner) {
         cell log_data1 = in_msg_body~load_ref();
         slice log_data1_cs = log_data1.begin_parse();
@@ -263,21 +252,17 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
         ;; Add wallet to new owner's list
         storage::owner_wallets = add_to_index(storage::owner_wallets, new_owner, wallet_address);
             
-        ;; Save updated data
         save_data();
         
         return ();
     }
     
-    ;; For all other operations, enforce owner-only access
     if (~ storage::init?) {
         storage::owner = sender_addr;
         storage::init? = true;
     }
     
-    ;; Owner-only operations
     if (op == op::set_logger_address) {
-        ;; Allow setting owner
         if (equal_slices(sender_addr, storage::owner)) {
             slice new_owner = in_msg_body~load_msg_addr();
             storage::owner = new_owner;
@@ -286,7 +271,6 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
         return ();
     }
     
-    ;; Check owner access for remaining operations
     throw_unless(error::access_denied, equal_slices(sender_addr, storage::owner));
 }
 

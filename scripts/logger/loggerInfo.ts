@@ -2,7 +2,7 @@ import { Address } from '@ton/core';
 import { NetworkProvider } from '@ton/blueprint';
 import { VestingLogger } from '../../wrappers/VestingLogger';
 
-const LOGGER_CONTRACT_ADDRESS = "EQBz4a1gZCUZCLlPD_XgLY84PDdfZ6mfE64vHa0RuNXjeEOO";
+const LOGGER_CONTRACT_ADDRESS = "EQDAYIbTg4dKOX5M4TIxtAlPTqDcnP2x8Y9EAtvHCuyoFoOV";
 const JETTON_MASTER_ADDRESS = "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
 
 export async function run(provider: NetworkProvider) {

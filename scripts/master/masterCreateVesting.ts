@@ -2,16 +2,16 @@ import { Address, toNano, fromNano } from "@ton/core";
 import { VestingMaster } from "../../wrappers/VestingMaster";
 import { NetworkProvider } from "@ton/blueprint";
 
-const MASTER_CONTRACT_ADDRESS = "EQCQzF1rwoULP2Ne6NWAsqbSzIoHEK3mVrLv9B3TZ6vPGtfC";
+const MASTER_CONTRACT_ADDRESS = "EQDDetw95GedmgIUchJf-7DsG96Y-Z3pe6tltlOgNdDh8H3L";
 const JETTON_MASTER_ADDRESS = "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
-const LOGGER_CONTRACT_ADDRESS = "EQBz4a1gZCUZCLlPD_XgLY84PDdfZ6mfE64vHa0RuNXjeEOO";
+const LOGGER_CONTRACT_ADDRESS = "EQDAYIbTg4dKOX5M4TIxtAlPTqDcnP2x8Y9EAtvHCuyoFoOV";
 
 const CUSTOM_PARAMS = {
   START_DELAY: 60, // 1 minute
   TOTAL_DURATION: 3600, // 1 hour
   UNLOCK_PERIOD: 360, // 6 minutes
   CLIFF_DURATION: 0, // 0
-  CUSTOM_START_DATE: new Date('2025-03-06T08:00:00Z')
+  CUSTOM_START_DATE: new Date('2025-03-06T14:00:00Z')
 };
 
 function formatDate(timestamp: number): string {
@@ -43,6 +43,7 @@ export async function run(provider: NetworkProvider) {
     );
 
     const jettonMaster = Address.parse(JETTON_MASTER_ADDRESS);
+    const loggerAddress = Address.parse(LOGGER_CONTRACT_ADDRESS);
     const royaltyFee = await vestingMaster.getRoyaltyFee();
 
     //const now = Math.floor(Date.now() / 1000);
@@ -72,6 +73,8 @@ export async function run(provider: NetworkProvider) {
       cancelContractPermission,
       changeRecipientPermission
     );
+
+    console.log("Vesting Wallet Address:", walletAddress.toString());
 
     console.log(
       "\nVesting Wallet will be created with these CUSTOM parameters:"
@@ -110,7 +113,7 @@ export async function run(provider: NetworkProvider) {
         cancelContractPermission: cancelContractPermission,
         changeRecipientPermission: changeRecipientPermission,
         forwardRemainingBalance: toNano("0.2"),
-        loggerAddress: Address.parse(LOGGER_CONTRACT_ADDRESS)
+        loggerAddress: loggerAddress
       }
     );
 
