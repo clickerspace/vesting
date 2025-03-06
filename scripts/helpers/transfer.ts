@@ -5,7 +5,7 @@ const mnemonic = ['burger', 'sight', 'mother', 'song', 'arm', 'sheriff', 'ice', 
 const API_KEY = "006dccec833d6e1193c45e9c5eaa839f2170f2e780efb2af74cfb05a6261e99d";
 
 const JETTON_MASTER_ADDRESS = "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
-const MASTER_CONTRACT_ADDRESS = "EQDDetw95GedmgIUchJf-7DsG96Y-Z3pe6tltlOgNdDh8H3L";
+const MASTER_CONTRACT_ADDRESS = "EQASWsatwfLLtTFqeJIzYGBGoep1sEuIHLTywDys6gZg63zh";
 
 const client = new TonClient({ endpoint: 'https://testnet.toncenter.com/api/v2/jsonRPC', apiKey: API_KEY });
 
@@ -150,7 +150,7 @@ export async function run() {
       .storeUint(isAutoClaim, 1) // is_auto_claim
       .storeUint(cancelContractPermission, 3) // cancel_contract_permission
       .storeUint(changeRecipientPermission, 3) // change_recipient_permission
-      .storeCoins(toNano(2)) // forward_remaining_balance (deployment for gas)
+      .storeCoins(toNano(1)) // forward_remaining_balance (deployment for gas)
       .storeAddress(masterJettonWalletAddress) // vesting wallet's jetton wallet address
       .endCell();
 
@@ -163,20 +163,20 @@ export async function run() {
     console.log(`${jettonAmount} jetton factory contract is being transferred...`);
     
     const messageBody = beginCell()
-      .storeUint(0xf8a7ea5, 32)
-      .storeUint(0, 64)
-      .storeCoins(jettonAmount)
-      .storeAddress(Address.parse(MASTER_CONTRACT_ADDRESS))
-      .storeAddress(Address.parse(address))
-      .storeBit(1)
-      .storeCoins(toNano(2))
-      .storeBit(1)
-      .storeRef(createVestingPayload)
-      .endCell();
+    .storeUint(0xf8a7ea5, 32)
+    .storeUint(0, 64)
+    .storeCoins(jettonAmount)
+    .storeAddress(Address.parse(MASTER_CONTRACT_ADDRESS))
+    .storeAddress(Address.parse(address))
+    .storeBit(0)
+    .storeCoins(toNano(1))
+    .storeBit(1)
+    .storeRef(createVestingPayload)
+    .endCell();
 
     const internalMessage = internal({
       to: myJettonWalletAddress,
-      value: toNano('2'),
+      value: toNano('1.5'),
       bounce: true,
       body: messageBody,
     });

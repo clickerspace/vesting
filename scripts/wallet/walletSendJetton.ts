@@ -2,7 +2,7 @@ import { Address, toNano } from '@ton/core';
 import { VestingWallet } from '../../wrappers/VestingWallet';
 import { NetworkProvider } from '@ton/blueprint';
 
-const WALLET_CONTRACT_ADDRESS = "EQB2_LsH_YzjC0lGVG97IKwWLxeN1RmYh4r3aUKIZyxpitoC";
+const WALLET_CONTRACT_ADDRESS = "EQDsQgwQSIgfq1ekifYmv_0EaWBtgzKmd18TtpfvyaO1UDP0";
 const RECIPIENT_ADDRESS = "0QARfBT9PMJ_TjX8bUqFvI-ZMqixM7kY68_-7tmVm-khfOyj";
 const WALLET_JETTON_ADDRESS = "EQAKTxgtOaizaI_QNammT20sb2v0j8-wvbJULduGoKUqNiuc";
 

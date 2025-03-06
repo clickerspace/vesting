@@ -34,7 +34,7 @@ const int royalty::fee = 5000000; ;; 0.05 TON per vesting wallet creation
 const int min_tons_for_storage = 10000000; ;; 0.01 TON
 
 ;; Gas Constants
-const int gas::jetton_transfer = 900000000; ;; 0.9 TON
+const int gas::jetton_transfer = 500000000; ;; 0.5 TON
 const int gas::logger_message = 100000000; ;; 0.1 TON
 
 ;; Address Size
@@ -163,55 +163,50 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
         slice from_address = in_msg_body~load_msg_addr();
     
         throw_unless(error::insufficient_fee, msg_value >= royalty::fee);
-    
-        ;; in_msg_body payload
-        if (in_msg_body.slice_refs() > 0) {
-            slice payload = in_msg_body~load_ref().begin_parse();
-    
-            throw_unless(47, payload.slice_refs() >= 2);
-    
-            cell payload_cell1 = payload~load_ref();
-            slice payload_part1 = payload_cell1.begin_parse();
-    
-            slice vesting_owner = payload_part1~load_msg_addr();
-            slice vesting_recipient = payload_part1~load_msg_addr();
-            slice jetton_master = payload_part1~load_msg_addr();
-            int vesting_total_amount = payload_part1~load_coins();
-            int vesting_start_time = payload_part1~load_uint(32);
-            int vesting_total_duration = payload_part1~load_uint(32);
-            int unlock_period = payload_part1~load_uint(32);
-            int cliff_duration = payload_part1~load_uint(32);
-    
-            cell payload_cell2 = payload~load_ref();
-            slice payload_part2 = payload_cell2.begin_parse();
-    
-            int is_auto_claim = payload_part2~load_uint(1);
-            int cancel_contract_permission = payload_part2~load_uint(3);
-            int change_recipient_permission = payload_part2~load_uint(3);
-            int forward_ton_amount = payload_part2~load_coins();
-            slice jetton_wallet_address = payload_part2~load_msg_addr();
-    
-            int packed_params = (vesting_start_time << 96) | 
-            (vesting_total_duration << 64) | 
-            (unlock_period << 32) | cliff_duration;
 
-            cell state_init = create_vesting_wallet_state_init(
-                vesting_owner, 
-                vesting_recipient, 
-                jetton_master,
-                jetton_amount,
-                packed_params,
-                is_auto_claim,
-                cancel_contract_permission,
-                change_recipient_permission,
-                vesting_wallet_code,
-                logger_address
-            );
+        ;; in_msg_body payload
+        slice payload = in_msg_body~load_ref().begin_parse();
+
+        cell payload_cell1 = payload~load_ref();
+        slice payload_part1 = payload_cell1.begin_parse();
+        slice vesting_owner = payload_part1~load_msg_addr();
+        slice vesting_recipient = payload_part1~load_msg_addr();
+        slice jetton_master = payload_part1~load_msg_addr();
+        int vesting_total_amount = payload_part1~load_coins();
+        int vesting_start_time = payload_part1~load_uint(32);
+        int vesting_total_duration = payload_part1~load_uint(32);
+        int unlock_period = payload_part1~load_uint(32);
+        int cliff_duration = payload_part1~load_uint(32);
+    
+        cell payload_cell2 = payload~load_ref();
+        slice payload_part2 = payload_cell2.begin_parse();
+        int is_auto_claim = payload_part2~load_uint(1);
+        int cancel_contract_permission = payload_part2~load_uint(3);
+        int change_recipient_permission = payload_part2~load_uint(3);
+        int forward_ton_amount = payload_part2~load_coins();
+        slice jetton_wallet_address = payload_part2~load_msg_addr();
+    
+        int packed_params = (vesting_start_time << 96) | 
+        (vesting_total_duration << 64) | 
+        (unlock_period << 32) | cliff_duration;
+
+        cell state_init = create_vesting_wallet_state_init(
+            vesting_owner, 
+            vesting_recipient, 
+            jetton_master,
+            jetton_amount,
+            packed_params,
+            is_auto_claim,
+            cancel_contract_permission,
+            change_recipient_permission,
+            vesting_wallet_code,
+            logger_address
+        );
         
-            slice vesting_wallet_address = calculate_vesting_wallet_address(state_init);
+        slice vesting_wallet_address = calculate_vesting_wallet_address(state_init);
         
-            ;; Deploy vesting wallet
-            var deploy_msg = begin_cell()
+        ;; Deploy vesting wallet
+        var deploy_msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(vesting_wallet_address)
             .store_coins(forward_ton_amount) 
@@ -219,10 +214,10 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
             .store_ref(state_init)
             .store_ref(begin_cell().end_cell());
         
-            send_raw_message(deploy_msg.end_cell(), send_mode::pay_gas_separately);
+        send_raw_message(deploy_msg.end_cell(), send_mode::pay_gas_separately);
         
-            ;; Transfer jetons to vesting wallet
-            cell transfer_body = begin_cell()
+        ;; Transfer jetons to vesting wallet
+        cell transfer_body = begin_cell()
             .store_uint(op::transfer, 32)
             .store_uint(query_id, 64)
             .store_coins(jetton_amount)
@@ -233,18 +228,17 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
             .store_uint(0, 1)
             .end_cell();
         
-            var transfer_msg = begin_cell()
+        var transfer_msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(jetton_wallet_address)
             .store_coins(forward_ton_amount + gas::jetton_transfer)
             .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_ref(transfer_body);
         
-            send_raw_message(transfer_msg.end_cell(), send_mode::pay_gas_separately);
+        send_raw_message(transfer_msg.end_cell(), send_mode::pay_gas_separately);
             
-            ;; Logger
-            if ((~ null?(logger_address)) & (logger_address.preload_uint(2) != 0)) {
-                var log_msg = begin_cell()
+        ;; Logger
+        var log_msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(logger_address)
             .store_coins(gas::logger_message)
@@ -252,54 +246,31 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
             .store_uint(op::register_wallet, 32)
             .store_uint(query_id, 64);
             
-                cell log_data = begin_cell()
+        cell log_data = begin_cell()
                 .store_slice(vesting_wallet_address)
                 .store_slice(jetton_master)
                 .end_cell();
                 
-                cell log_data2 = begin_cell()
+        cell log_data2 = begin_cell()
                 .store_slice(vesting_owner)
                 .store_slice(vesting_recipient)
                 .store_uint(is_auto_claim, 1)
                 .end_cell();
                 
-                log_msg = log_msg.store_ref(log_data).store_ref(log_data2);
+        log_msg = log_msg.store_ref(log_data).store_ref(log_data2);
             
-                send_raw_message(log_msg.end_cell(), send_mode::pay_gas_separately);
-            }
+        send_raw_message(log_msg.end_cell(), send_mode::pay_gas_separately);
         
-            save_data(
-                owner_address, 
-                vesting_wallet_code,
-                logger_address,
-                total_wallets_created + 1, 
-                total_royalty_collected + royalty::fee
-            );
+        save_data(
+            owner_address, 
+            vesting_wallet_code,
+            logger_address,
+            total_wallets_created + 1, 
+            total_royalty_collected + royalty::fee
+        );
         
-            return ();
-        }
-    
-        cell msg_body = begin_cell()
-        .store_uint(op::transfer, 32)
-        .store_uint(query_id, 64)
-        .store_coins(jetton_amount)
-        .store_slice(from_address)
-        .store_slice(from_address)
-        .store_uint(0, 1)
-        .store_coins(0)
-        .store_uint(0, 1)
-        .end_cell();
-    
-        var msg = begin_cell()
-        .store_uint(0x18, 6)
-        .store_slice(sender_addr)
-        .store_coins(gas::jetton_transfer)
-        .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .store_ref(msg_body);
-    
-        send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
-    
         return ();
+    
     }
 
     ;; Create vesting wallet
