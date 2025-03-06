@@ -55,7 +55,7 @@ export async function run(provider: NetworkProvider) {
     console.log('\nNext steps:');
     console.log('1. Update master address in your script files to:', vestingMaster.address.toString());
     console.log('2. Create vesting wallets with:');
-    console.log('   npx blueprint run create-vesting');
+    console.log('   npx blueprint run masterCreateVesting');
     
     return {
       success: true,

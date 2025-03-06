@@ -226,7 +226,7 @@ export class VestingMaster implements Contract {
   }
 
   // Get wallet address
-  async getWalletAddress(
+  async getVestingWalletAddress(
     provider: ContractProvider,
     owner: Address,
     recipient: Address,

@@ -264,6 +264,7 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
         return ();
     }
 
+    ;; Set logger address (owner only)
     if (op == op::set_logger_address) {
         throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
         slice new_logger = in_msg_body~load_msg_addr();
@@ -335,7 +336,7 @@ cell get_wallet_code() method_id {
     return (total_wallets_created, total_royalty_collected);
 }
 
-;; Returns vesting wallet address for a given owner and parameters - updated with new parameters
+;; Returns vesting wallet address
 slice get_wallet_address(slice owner_address, slice recipient_address, slice jetton_master_address, 
     int vesting_total_amount, int vesting_start_time, int vesting_total_duration, 
     int unlock_period, int cliff_duration, int is_auto_claim, 
