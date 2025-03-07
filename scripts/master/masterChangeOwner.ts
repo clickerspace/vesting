@@ -2,7 +2,7 @@ import { Address } from '@ton/core';
 import { VestingMaster } from '../../wrappers/VestingMaster';
 import { NetworkProvider } from '@ton/blueprint';
 
-const MASTER_CONTRACT_ADDRESS = "EQASWsatwfLLtTFqeJIzYGBGoep1sEuIHLTywDys6gZg63zh";
+const MASTER_CONTRACT_ADDRESS = "EQBKaNmsGkg4wR3k7NhucEB2CTRL6F7duNTKtpsuBXROhUOY";
 const NEW_OWNER_ADDRESS = "0QARfBT9PMJ_TjX8bUqFvI-ZMqixM7kY68_-7tmVm-khfOyj";
 
 export async function run(provider: NetworkProvider) {

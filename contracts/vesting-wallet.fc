@@ -34,8 +34,8 @@ const int send_mode::carry_all_balance = 128; ;; Carry all the remaining balance
 const int send_mode::destroy = 32; ;; Destroy the contract after the message is sent
 
 ;; Gas Constants
-const int gas::jetton_transfer = 100000000; ;; Gas amount reserved for jetton transfer 0.1 TON (artırıldı)
-const int gas::logger_message = 10000000; ;; Gas amount reserved for logger messages 0.01 TON
+const int gas::jetton_transfer = 100000000; ;; 0.1 TON
+const int gas::logger_message = 100000000; ;; 0.1 TON
 
 ;; Vesting Constants
 const int vesting::min_period = 60; ;; Minimum vesting period in seconds (1 minute)

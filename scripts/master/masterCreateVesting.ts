@@ -2,7 +2,7 @@ import { Address, toNano, fromNano } from "@ton/core";
 import { VestingMaster } from "../../wrappers/VestingMaster";
 import { NetworkProvider } from "@ton/blueprint";
 
-const MASTER_CONTRACT_ADDRESS = "EQASWsatwfLLtTFqeJIzYGBGoep1sEuIHLTywDys6gZg63zh";
+const MASTER_CONTRACT_ADDRESS = "EQCSS0cZVy3djvgQrf5sUQ8EhEaquUC1sHJByOX5Ry6zqdsB";
 const JETTON_MASTER_ADDRESS = "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
 const LOGGER_CONTRACT_ADDRESS = "EQDAYIbTg4dKOX5M4TIxtAlPTqDcnP2x8Y9EAtvHCuyoFoOV";
 
@@ -11,7 +11,7 @@ const CUSTOM_PARAMS = {
   TOTAL_DURATION: 3600, // 1 hour
   UNLOCK_PERIOD: 360, // 6 minutes
   CLIFF_DURATION: 0, // 0
-  CUSTOM_START_DATE: new Date('2025-03-06T14:00:00Z')
+  CUSTOM_START_DATE: new Date('2025-03-07T12:00:00Z')
 };
 
 function formatDate(timestamp: number): string {

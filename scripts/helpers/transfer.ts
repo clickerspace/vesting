@@ -5,7 +5,7 @@ const mnemonic = ['burger', 'sight', 'mother', 'song', 'arm', 'sheriff', 'ice', 
 const API_KEY = "006dccec833d6e1193c45e9c5eaa839f2170f2e780efb2af74cfb05a6261e99d";
 
 const JETTON_MASTER_ADDRESS = "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
-const MASTER_CONTRACT_ADDRESS = "EQASWsatwfLLtTFqeJIzYGBGoep1sEuIHLTywDys6gZg63zh";
+const MASTER_CONTRACT_ADDRESS = "EQCSS0cZVy3djvgQrf5sUQ8EhEaquUC1sHJByOX5Ry6zqdsB";
 
 const client = new TonClient({ endpoint: 'https://testnet.toncenter.com/api/v2/jsonRPC', apiKey: API_KEY });
 
@@ -72,7 +72,6 @@ export async function run() {
 
     const workchain = 0;
     const wallet = WalletContractV4.create({ workchain, publicKey });
-    //const address = wallet.address.toString();
     const address = "0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5";
     const contract = client.open(wallet);
 
@@ -97,12 +96,12 @@ export async function run() {
     const myJettonWalletAddress = await getUserJettonWalletAddress(address, JETTON_MASTER_ADDRESS);
     console.log('My jetton wallet address:', myJettonWalletAddress.toString());
 
-    const startDelay = 60; // 1 dakika
-    const totalDuration = 3600; // 1 saat
-    const unlockPeriod = 360; // 6 dakika
+    const startDelay = 60; // 1 minute
+    const totalDuration = 3600; // 1 hour
+    const unlockPeriod = 360; // 6 minutes
     const cliffDuration = 0;
     
-    const customStartDate = new Date('2025-03-06T14:00:00Z');
+    const customStartDate = new Date('2025-03-07T16:00:00Z');
     const dateTime = Math.floor(customStartDate.getTime() / 1000);
     
     const startTime = dateTime + startDelay;
@@ -134,49 +133,38 @@ export async function run() {
       MASTER_CONTRACT_ADDRESS, 
       JETTON_MASTER_ADDRESS
     );
-
-    const createVestingPayloadPart1 = beginCell()
-      .storeAddress(Address.parse(address)) // vesting_owner
-      .storeAddress(Address.parse(recipientAddress)) // vesting_recipient
-      .storeAddress(Address.parse(JETTON_MASTER_ADDRESS)) // jetton_master_address
-      .storeCoins(jettonAmount) // vesting_total_amount
-      .storeUint(startTime, 32) // vesting_start_time
-      .storeUint(totalDuration, 32) // vesting_total_duration
-      .storeUint(unlockPeriod, 32) // unlock_period
-      .storeUint(cliffDuration, 32) // cliff_duration
-      .endCell();
-
-    const createVestingPayloadPart2 = beginCell()
-      .storeUint(isAutoClaim, 1) // is_auto_claim
-      .storeUint(cancelContractPermission, 3) // cancel_contract_permission
-      .storeUint(changeRecipientPermission, 3) // change_recipient_permission
-      .storeCoins(toNano(1)) // forward_remaining_balance (deployment for gas)
-      .storeAddress(masterJettonWalletAddress) // vesting wallet's jetton wallet address
-      .endCell();
-
-    // Main payload with reference method
-    const createVestingPayload = beginCell()
-      .storeRef(createVestingPayloadPart1)
-      .storeRef(createVestingPayloadPart2)
-      .endCell();
-
-    console.log(`${jettonAmount} jetton factory contract is being transferred...`);
     
-    const messageBody = beginCell()
-    .storeUint(0xf8a7ea5, 32)
-    .storeUint(0, 64)
-    .storeCoins(jettonAmount)
-    .storeAddress(Address.parse(MASTER_CONTRACT_ADDRESS))
-    .storeAddress(Address.parse(address))
-    .storeBit(0)
-    .storeCoins(toNano(1))
-    .storeBit(1)
-    .storeRef(createVestingPayload)
+    const flatPayload = beginCell()
+    //.storeAddress(Address.parse(address)) // vesting_owner
+    .storeAddress(Address.parse(recipientAddress)) // vesting_recipient
+    .storeAddress(Address.parse(JETTON_MASTER_ADDRESS)) // jetton_master_address
+    .storeUint(startTime, 32) // vesting_start_time
+    .storeUint(totalDuration, 32) // vesting_total_duration
+    .storeUint(unlockPeriod, 32) // unlock_period
+    .storeUint(cliffDuration, 32) // cliff_duration
+    .storeUint(isAutoClaim, 1) // is_auto_claim
+    .storeUint(cancelContractPermission, 3) // cancel_contract_permission
+    .storeUint(changeRecipientPermission, 3) // change_recipient_permission
+    .storeCoins(toNano(1)) // forward_ton_amount for deployment
+    .storeAddress(masterJettonWalletAddress) // jetton_wallet_address
     .endCell();
+  
+  console.log(`${jettonAmount} jetton to factory contract is being transferred...`);
+    const messageBody = beginCell()
+      .storeUint(0xf8a7ea5, 32)
+      .storeUint(0, 64)
+      .storeCoins(jettonAmount)
+      .storeAddress(Address.parse(MASTER_CONTRACT_ADDRESS))
+      .storeAddress(Address.parse(address))
+      .storeBit(0)
+      .storeCoins(toNano(0.5))
+      .storeBit(1)
+      .storeRef(flatPayload)
+      .endCell();
 
     const internalMessage = internal({
       to: myJettonWalletAddress,
-      value: toNano('1.5'),
+      value: toNano('1'),
       bounce: true,
       body: messageBody,
     });
