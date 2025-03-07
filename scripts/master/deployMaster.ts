@@ -16,7 +16,8 @@ export async function run(provider: NetworkProvider) {
         vesting_wallet_code: walletCode,
         logger_address: Address.parse(LOGGER_CONTRACT_ADDRESS),
         total_wallets_created: 0,
-        total_royalty_collected: 0n
+        total_royalty_collected: 0n,
+        royalty_fee: 100000000n // 0.1 TON
       },
       await compile('VestingMaster'))
     );
@@ -46,6 +47,7 @@ export async function run(provider: NetworkProvider) {
       console.log('Current statistics:');
       console.log('- Total wallets created:', stats.totalWalletsCreated);
       console.log('- Total royalty collected:', fromNano(stats.totalRoyaltyCollected), 'TON');
+      console.log('- Royalty fee:', fromNano(royaltyFee), 'TON');
     } catch (e) {
       console.log('\nVesting Master deployed successfully!');
       console.log('Contract address:', vestingMaster.address.toString());

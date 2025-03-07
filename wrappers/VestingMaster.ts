@@ -16,6 +16,7 @@ export const VestingMasterOpcodes = {
   change_owner: 0x2345,
   withdraw_tons: 0x3456,
   set_logger_address: 0x4567,
+  set_royalty_fee: 0x8888,
 } as const;
 
 export type VestingMasterConfig = {
@@ -24,6 +25,7 @@ export type VestingMasterConfig = {
   logger_address: Address;
   total_wallets_created: number;
   total_royalty_collected: bigint;
+  royalty_fee: bigint;
 };
 
 export function vestingMasterConfigToCell(config: VestingMasterConfig): Cell {
@@ -32,6 +34,7 @@ export function vestingMasterConfigToCell(config: VestingMasterConfig): Cell {
     .storeAddress(config.logger_address)
     .storeUint(config.total_wallets_created, 64)
     .storeCoins(config.total_royalty_collected)
+    .storeCoins(config.royalty_fee)
     .endCell();
     
   return beginCell()
@@ -188,6 +191,25 @@ export class VestingMaster implements Contract {
         .storeUint(VestingMasterOpcodes.withdraw_tons, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
+        .endCell(),
+    });
+  }
+
+  // Set royalty fee
+  async sendSetRoyaltyFee(
+    provider: ContractProvider,
+    via: Sender,
+    newRoyaltyFee: bigint
+  ) {
+    const queryId = 6n;
+
+    return await provider.internal(via, {
+      value: toNano("0.05"),
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell()
+        .storeUint(VestingMasterOpcodes.set_royalty_fee, 32)
+        .storeUint(queryId, 64)
+        .storeCoins(newRoyaltyFee)
         .endCell(),
     });
   }
