@@ -2,16 +2,16 @@ import { Address, toNano, fromNano } from "@ton/core";
 import { VestingMaster } from "../../wrappers/VestingMaster";
 import { NetworkProvider } from "@ton/blueprint";
 
-const MASTER_CONTRACT_ADDRESS = "EQCSS0cZVy3djvgQrf5sUQ8EhEaquUC1sHJByOX5Ry6zqdsB";
+const MASTER_CONTRACT_ADDRESS = "EQAtMYo9SeP2PkvrdPAFYbUTNE44O60-rKXPoEG7SdZhnDIn";
 const JETTON_MASTER_ADDRESS = "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
-const LOGGER_CONTRACT_ADDRESS = "EQDAYIbTg4dKOX5M4TIxtAlPTqDcnP2x8Y9EAtvHCuyoFoOV";
+const LOGGER_CONTRACT_ADDRESS = "EQBD7aLEhBwj8XojQLJ7ExvUYdEXvuP5HiDMr4LjWkrUv9ey";
 
 const CUSTOM_PARAMS = {
   START_DELAY: 60, // 1 minute
   TOTAL_DURATION: 3600, // 1 hour
   UNLOCK_PERIOD: 360, // 6 minutes
   CLIFF_DURATION: 0, // 0
-  CUSTOM_START_DATE: new Date('2025-03-07T12:00:00Z')
+  CUSTOM_START_DATE: new Date('2025-03-08T13:00:00Z')
 };
 
 function formatDate(timestamp: number): string {
@@ -97,6 +97,7 @@ export async function run(provider: NetworkProvider) {
     );
     console.log("Sending transaction...");
     
+    
     await vestingMaster.sendCreateVestingWallet(
       provider.sender(),
       {
@@ -113,7 +114,6 @@ export async function run(provider: NetworkProvider) {
         cancelContractPermission: cancelContractPermission,
         changeRecipientPermission: changeRecipientPermission,
         forwardRemainingBalance: toNano("0.2"),
-        loggerAddress: loggerAddress
       }
     );
 
@@ -130,6 +130,7 @@ export async function run(provider: NetworkProvider) {
       success: true,
       address: walletAddress.toString(),
     };
+    
   } catch (error) {
     console.error("Error creating vesting wallet:", error);
     throw error;

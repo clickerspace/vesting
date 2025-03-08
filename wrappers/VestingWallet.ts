@@ -213,7 +213,7 @@ export class VestingWallet implements Contract {
     const queryId = 1n;
 
     return await provider.internal(via, {
-      value: toNano("0.3"),
+      value: toNano("0.2"),
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell()
         .storeUint(VestingWalletOpcodes.withdraw_jettons, 32)

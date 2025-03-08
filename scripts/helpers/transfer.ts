@@ -1,21 +1,69 @@
-import { beginCell, Address, TonClient, internal, external, storeMessage, toNano, WalletContractV4, SendMode } from '@ton/ton';
-import { mnemonicToPrivateKey } from '@ton/crypto';
+import {
+  beginCell,
+  Address,
+  TonClient,
+  internal,
+  external,
+  storeMessage,
+  toNano,
+  WalletContractV4,
+  SendMode,
+} from "@ton/ton";
+import { mnemonicToPrivateKey } from "@ton/crypto";
 
-const mnemonic = ['burger', 'sight', 'mother', 'song', 'arm', 'sheriff', 'ice', 'crater', 'purchase', 'mask', 'nurse', 'lock', 'mammal', 'various', 'arena', 'reveal', 'velvet', 'scan', 'control', 'student', 'whisper', 'eternal', 'remove', 'toe'];
-const API_KEY = "006dccec833d6e1193c45e9c5eaa839f2170f2e780efb2af74cfb05a6261e99d";
+const mnemonic = [
+  "burger",
+  "sight",
+  "mother",
+  "song",
+  "arm",
+  "sheriff",
+  "ice",
+  "crater",
+  "purchase",
+  "mask",
+  "nurse",
+  "lock",
+  "mammal",
+  "various",
+  "arena",
+  "reveal",
+  "velvet",
+  "scan",
+  "control",
+  "student",
+  "whisper",
+  "eternal",
+  "remove",
+  "toe",
+];
+const API_KEY =
+  "006dccec833d6e1193c45e9c5eaa839f2170f2e780efb2af74cfb05a6261e99d";
 
-const JETTON_MASTER_ADDRESS = "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
-const MASTER_CONTRACT_ADDRESS = "EQCSS0cZVy3djvgQrf5sUQ8EhEaquUC1sHJByOX5Ry6zqdsB";
+const JETTON_MASTER_ADDRESS =
+  "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
+const MASTER_CONTRACT_ADDRESS =
+  "EQAtMYo9SeP2PkvrdPAFYbUTNE44O60-rKXPoEG7SdZhnDIn";
 
-const client = new TonClient({ endpoint: 'https://testnet.toncenter.com/api/v2/jsonRPC', apiKey: API_KEY });
+const client = new TonClient({
+  endpoint: "https://testnet.toncenter.com/api/v2/jsonRPC",
+  apiKey: API_KEY,
+});
 
 // Take any address's jetton wallet address
-async function getUserJettonWalletAddress(userAddress: string, jettonMasterAddress: string) {
-  const userAddressCell = beginCell().storeAddress(Address.parse(userAddress)).endCell();
+async function getUserJettonWalletAddress(
+  userAddress: string,
+  jettonMasterAddress: string
+) {
+  const userAddressCell = beginCell()
+    .storeAddress(Address.parse(userAddress))
+    .endCell();
 
-  const response = await client.runMethod(Address.parse(jettonMasterAddress), 'get_wallet_address', [
-    { type: 'slice', cell: userAddressCell },
-  ]);
+  const response = await client.runMethod(
+    Address.parse(jettonMasterAddress),
+    "get_wallet_address",
+    [{ type: "slice", cell: userAddressCell }]
+  );
 
   return response.stack.readAddress();
 }
@@ -35,32 +83,45 @@ async function getVestingWalletAddress(
 ) {
   const response = await client.runMethod(
     Address.parse(MASTER_CONTRACT_ADDRESS),
-    'get_wallet_address',
+    "get_wallet_address",
     [
-      { type: 'slice', cell: beginCell().storeAddress(Address.parse(ownerAddress)).endCell() },
-      { type: 'slice', cell: beginCell().storeAddress(Address.parse(recipientAddress)).endCell() },
-      { type: 'slice', cell: beginCell().storeAddress(Address.parse(jettonMasterAddress)).endCell() },
-      { type: 'int', value: BigInt(vestingTotalAmount) },
-      { type: 'int', value: BigInt(startTime) },
-      { type: 'int', value: BigInt(totalDuration) },
-      { type: 'int', value: BigInt(unlockPeriod) },
-      { type: 'int', value: BigInt(cliffDuration) },
-      { type: 'int', value: BigInt(isAutoClaim) },
-      { type: 'int', value: BigInt(cancelPermission) },
-      { type: 'int', value: BigInt(changeRecipientPermission) }
+      {
+        type: "slice",
+        cell: beginCell().storeAddress(Address.parse(ownerAddress)).endCell(),
+      },
+      {
+        type: "slice",
+        cell: beginCell()
+          .storeAddress(Address.parse(recipientAddress))
+          .endCell(),
+      },
+      {
+        type: "slice",
+        cell: beginCell()
+          .storeAddress(Address.parse(jettonMasterAddress))
+          .endCell(),
+      },
+      { type: "int", value: BigInt(vestingTotalAmount) },
+      { type: "int", value: BigInt(startTime) },
+      { type: "int", value: BigInt(totalDuration) },
+      { type: "int", value: BigInt(unlockPeriod) },
+      { type: "int", value: BigInt(cliffDuration) },
+      { type: "int", value: BigInt(isAutoClaim) },
+      { type: "int", value: BigInt(cancelPermission) },
+      { type: "int", value: BigInt(changeRecipientPermission) },
     ]
   );
 
   const vestingWalletAddress = response.stack.readAddress();
-  
+
   const vestingJettonWalletAddress = await getUserJettonWalletAddress(
-    vestingWalletAddress.toString(), 
+    vestingWalletAddress.toString(),
     jettonMasterAddress
   );
-  
+
   return {
     vestingWalletAddress,
-    vestingJettonWalletAddress
+    vestingJettonWalletAddress,
   };
 }
 
@@ -72,38 +133,47 @@ export async function run() {
 
     const workchain = 0;
     const wallet = WalletContractV4.create({ workchain, publicKey });
-    const address = "0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5";
+    const address = wallet.address.toString({
+      urlSafe: true,
+      bounceable: false,
+      testOnly: true,
+    });
     const contract = client.open(wallet);
 
-    console.log('Wallet address:', address);
+    console.log("Wallet address:", address);
 
     const balance = await contract.getBalance();
-    console.log('Balance:', balance);
+    console.log("Balance:", balance);
 
     const seqno = await contract.getSeqno();
-    console.log('Seqno:', seqno);
+    console.log("Seqno:", seqno);
 
     const { init } = contract;
-    const contractDeployed = await client.isContractDeployed(Address.parse(address));
+    const contractDeployed = await client.isContractDeployed(
+      Address.parse(address)
+    );
     let neededInit: null | typeof init = null;
 
     if (init && !contractDeployed) {
-      console.log('Wallet is not deployed, deploying...');
+      console.log("Wallet is not deployed, deploying...");
       neededInit = init;
     }
 
-    console.log('Getting my jetton wallet address...');
-    const myJettonWalletAddress = await getUserJettonWalletAddress(address, JETTON_MASTER_ADDRESS);
-    console.log('My jetton wallet address:', myJettonWalletAddress.toString());
+    console.log("Getting my jetton wallet address...");
+    const myJettonWalletAddress = await getUserJettonWalletAddress(
+      address,
+      JETTON_MASTER_ADDRESS
+    );
+    console.log("My jetton wallet address:", myJettonWalletAddress.toString());
 
     const startDelay = 60; // 1 minute
     const totalDuration = 3600; // 1 hour
     const unlockPeriod = 360; // 6 minutes
     const cliffDuration = 0;
-    
-    const customStartDate = new Date('2025-03-07T16:00:00Z');
+
+    const customStartDate = new Date("2025-03-08T15:00:00Z");
     const dateTime = Math.floor(customStartDate.getTime() / 1000);
-    
+
     const startTime = dateTime + startDelay;
     const recipientAddress = "0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5";
     const jettonAmount = toNano("100");
@@ -112,59 +182,72 @@ export async function run() {
     const changeRecipientPermission = 2; // only_owner
 
     // Before transfer, calculate vesting wallet address and its jetton wallet address
-    const { vestingWalletAddress, vestingJettonWalletAddress } = await getVestingWalletAddress(
-      address,
-      recipientAddress,
-      JETTON_MASTER_ADDRESS,
-      jettonAmount,
-      startTime,
-      totalDuration,
-      unlockPeriod,
-      cliffDuration,
-      isAutoClaim,
-      cancelContractPermission,
-      changeRecipientPermission
+    const { vestingWalletAddress, vestingJettonWalletAddress } =
+      await getVestingWalletAddress(
+        address,
+        recipientAddress,
+        JETTON_MASTER_ADDRESS,
+        jettonAmount,
+        startTime,
+        totalDuration,
+        unlockPeriod,
+        cliffDuration,
+        isAutoClaim,
+        cancelContractPermission,
+        changeRecipientPermission
+      );
+
+    console.log(
+      "Vesting wallet address to be created:",
+      vestingWalletAddress.toString()
     );
-    
-    console.log("Vesting wallet address to be created:", vestingWalletAddress.toString());
-    console.log("Vesting wallet's jetton wallet address:", vestingJettonWalletAddress.toString());
+    console.log(
+      "Vesting wallet's jetton wallet address:",
+      vestingJettonWalletAddress.toString()
+    );
 
     const masterJettonWalletAddress = await getUserJettonWalletAddress(
-      MASTER_CONTRACT_ADDRESS, 
+      MASTER_CONTRACT_ADDRESS,
       JETTON_MASTER_ADDRESS
     );
-    
-    const flatPayload = beginCell()
-    //.storeAddress(Address.parse(address)) // vesting_owner
-    .storeAddress(Address.parse(recipientAddress)) // vesting_recipient
-    .storeAddress(Address.parse(JETTON_MASTER_ADDRESS)) // jetton_master_address
-    .storeUint(startTime, 32) // vesting_start_time
-    .storeUint(totalDuration, 32) // vesting_total_duration
-    .storeUint(unlockPeriod, 32) // unlock_period
-    .storeUint(cliffDuration, 32) // cliff_duration
-    .storeUint(isAutoClaim, 1) // is_auto_claim
-    .storeUint(cancelContractPermission, 3) // cancel_contract_permission
-    .storeUint(changeRecipientPermission, 3) // change_recipient_permission
-    .storeCoins(toNano(1)) // forward_ton_amount for deployment
-    .storeAddress(masterJettonWalletAddress) // jetton_wallet_address
-    .endCell();
-  
-  console.log(`${jettonAmount} jetton to factory contract is being transferred...`);
+
+    const forwardPayload1 = beginCell()
+      .storeAddress(Address.parse(address)) // vesting_owner
+      .storeAddress(Address.parse(recipientAddress)) // vesting_recipient
+      .endCell();
+
+    const forwardPayload2 = beginCell()
+      .storeAddress(Address.parse(JETTON_MASTER_ADDRESS)) // jetton_master_address
+      .storeAddress(masterJettonWalletAddress) // master jetton_wallet_address
+      .storeUint(startTime, 32)
+      .storeUint(totalDuration, 32)
+      .storeUint(unlockPeriod, 32)
+      .storeUint(cliffDuration, 32)
+      .storeUint(isAutoClaim, 1)
+      .storeUint(cancelContractPermission, 3)
+      .storeUint(changeRecipientPermission, 3)
+      .endCell();
+
+    const combinedForwardPayload = beginCell()
+      .storeRef(forwardPayload1)
+      .storeRef(forwardPayload2)
+      .endCell();
+
     const messageBody = beginCell()
       .storeUint(0xf8a7ea5, 32)
-      .storeUint(0, 64)
+      .storeUint(0n, 64)
       .storeCoins(jettonAmount)
       .storeAddress(Address.parse(MASTER_CONTRACT_ADDRESS))
       .storeAddress(Address.parse(address))
       .storeBit(0)
-      .storeCoins(toNano(0.5))
+      .storeCoins(toNano(1))
       .storeBit(1)
-      .storeRef(flatPayload)
+      .storeRef(combinedForwardPayload)
       .endCell();
 
     const internalMessage = internal({
       to: myJettonWalletAddress,
-      value: toNano('1'),
+      value: toNano("1.2"),
       bounce: true,
       body: messageBody,
     });
@@ -182,20 +265,24 @@ export async function run() {
       body,
     });
 
-    const externalMessageCell = beginCell().store(storeMessage(externalMessage)).endCell();
+    const externalMessageCell = beginCell()
+      .store(storeMessage(externalMessage))
+      .endCell();
 
     const signedTransaction = externalMessageCell.toBoc();
-    const hash = externalMessageCell.hash().toString('hex');
+    const hash = externalMessageCell.hash().toString("hex");
 
-    console.log('Transaction hash:', hash);
-    console.log('Sending transaction...');
+    console.log("Transaction hash:", hash);
+    console.log("Sending transaction...");
 
     await client.sendFile(signedTransaction);
-    console.log('Transaction sent successfully!');
-    console.log('Vesting wallet address:', vestingWalletAddress.toString());
-    console.log('Vesting jetton wallet address:', vestingJettonWalletAddress.toString());
-    
+    console.log("Transaction sent successfully!");
+    console.log("Vesting wallet address:", vestingWalletAddress.toString());
+    console.log(
+      "Vesting jetton wallet address:",
+      vestingJettonWalletAddress.toString()
+    );
   } catch (error) {
-    console.error('Error:', error);
+    console.error("Error:", error);
   }
 }

@@ -17,6 +17,7 @@ export const VestingMasterOpcodes = {
   withdraw_tons: 0x3456,
   set_logger_address: 0x4567,
   set_royalty_fee: 0x8888,
+  withdraw_jettons: 0x7777,
 } as const;
 
 export type VestingMasterConfig = {
@@ -85,7 +86,6 @@ export class VestingMaster implements Contract {
       cancelContractPermission: number;
       changeRecipientPermission: number;
       forwardRemainingBalance: bigint;
-      loggerAddress: Address;
     }
   ) {
     const queryId = 1n;
@@ -107,7 +107,6 @@ export class VestingMaster implements Contract {
       .storeUint(opts.cancelContractPermission, 3)
       .storeUint(opts.changeRecipientPermission, 3)
       .storeCoins(opts.forwardRemainingBalance)
-      .storeAddress(opts.loggerAddress)
       .endCell();
     
     const msgBody = mainCell.storeRef(refCell).endCell();
@@ -191,6 +190,29 @@ export class VestingMaster implements Contract {
         .storeUint(VestingMasterOpcodes.withdraw_tons, 32)
         .storeUint(queryId, 64)
         .storeCoins(amount)
+        .endCell(),
+    });
+  }
+
+  // Withdraw Jettons
+  async sendWithdrawJettons(
+    provider: ContractProvider,
+    via: Sender,
+    amount: bigint,
+    forwardRemainingBalance: bigint,
+    jettonWalletAddress: Address
+  ) {
+    const queryId = 6n;
+
+    return await provider.internal(via, {
+      value: toNano("0.05"),
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell()
+        .storeUint(VestingMasterOpcodes.withdraw_jettons, 32)
+        .storeUint(queryId, 64)
+        .storeCoins(amount)
+        .storeCoins(forwardRemainingBalance)
+        .storeAddress(jettonWalletAddress)
         .endCell(),
     });
   }

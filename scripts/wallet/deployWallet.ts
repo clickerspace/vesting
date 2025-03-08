@@ -4,7 +4,7 @@ import { NetworkProvider } from '@ton/blueprint';
 import { compile } from '@ton/blueprint';
 
 const JETTON_MASTER_ADDRESS = "EQA-EpakmTO_KBPX_NrSY88qS7vqdWKChc-VMtFK0CnSPUwr";
-const LOGGER_CONTRACT_ADDRESS = "EQDAYIbTg4dKOX5M4TIxtAlPTqDcnP2x8Y9EAtvHCuyoFoOV";
+const LOGGER_CONTRACT_ADDRESS = "EQBD7aLEhBwj8XojQLJ7ExvUYdEXvuP5HiDMr4LjWkrUv9ey";
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleString();

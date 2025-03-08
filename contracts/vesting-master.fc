@@ -162,29 +162,31 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
     if (op == op::transfer_notification) {
         int jetton_amount = in_msg_body~load_coins();
         slice from_address = in_msg_body~load_msg_addr();
-    
-        ;;throw_unless(error::insufficient_fee, msg_value >= royalty_fee);
 
         slice forward_payload = in_msg_body~load_ref().begin_parse();
 
-        slice vesting_recipient = forward_payload~load_msg_addr();
-        slice jetton_master = forward_payload~load_msg_addr();
-        int vesting_start_time = forward_payload~load_uint(32);
-        int vesting_total_duration = forward_payload~load_uint(32);
-        int unlock_period = forward_payload~load_uint(32);
-        int cliff_duration = forward_payload~load_uint(32);
-        int is_auto_claim = forward_payload~load_uint(1);
-        int cancel_contract_permission = forward_payload~load_uint(3);
-        int change_recipient_permission = forward_payload~load_uint(3);
-        int forward_ton_amount = forward_payload~load_coins();
-        slice jetton_wallet_address = forward_payload~load_msg_addr();
+        slice forward_payload1 = forward_payload~load_ref().begin_parse();
+        slice forward_payload2 = forward_payload~load_ref().begin_parse();
+
+        slice vesting_owner = forward_payload1~load_msg_addr();
+        slice vesting_recipient = forward_payload1~load_msg_addr();
+
+        slice jetton_master = forward_payload2~load_msg_addr();
+        slice jetton_wallet_address = forward_payload2~load_msg_addr();
+        int vesting_start_time = forward_payload2~load_uint(32);
+        int vesting_total_duration = forward_payload2~load_uint(32);
+        int unlock_period = forward_payload2~load_uint(32);
+        int cliff_duration = forward_payload2~load_uint(32);
+        int is_auto_claim = forward_payload2~load_uint(1);
+        int cancel_contract_permission = forward_payload2~load_uint(3);
+        int change_recipient_permission = forward_payload2~load_uint(3);
     
         int packed_params = (vesting_start_time << 96) | 
         (vesting_total_duration << 64) | 
         (unlock_period << 32) | cliff_duration;
 
         cell state_init = create_vesting_wallet_state_init(
-            sender_addr, 
+            vesting_owner,
             vesting_recipient, 
             jetton_master,
             jetton_amount,
@@ -199,15 +201,63 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
         slice vesting_wallet_address = calculate_vesting_wallet_address(state_init);
         
         ;; Deploy vesting wallet
-        var deploy_msg = begin_cell()
+        var msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(vesting_wallet_address)
-            .store_coins(forward_ton_amount) 
-            .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .store_coins(500000000) 
+            .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
             .store_ref(state_init)
             .store_ref(begin_cell().end_cell());
         
-        send_raw_message(deploy_msg.end_cell(), send_mode::pay_gas_separately);
+        send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
+        
+        ;; send jetton to vesting wallet
+        var msg_body = begin_cell()
+            .store_uint(op::transfer, 32)
+            .store_uint(query_id, 64)
+            .store_coins(jetton_amount)
+            .store_slice(vesting_wallet_address)
+            .store_slice(vesting_owner)
+            .store_uint(0, 1)
+            .store_coins(100000000)
+            .store_uint(0, 1)
+            .end_cell();
+
+        var msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(jetton_wallet_address)
+            .store_coins(20000000 + gas::jetton_transfer)
+            .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .store_ref(msg_body);
+        
+        send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
+
+        ;; Logger
+        if ((~ null?(logger_address)) & (logger_address.preload_uint(2) != 0)) {
+            var log_msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(logger_address)
+            .store_coins(10000000)
+            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .store_uint(op::register_wallet, 32)
+            .store_uint(query_id, 64);
+            
+            cell log_data = begin_cell()
+                .store_slice(vesting_wallet_address)
+                .store_slice(jetton_master)
+                .end_cell();
+                
+            cell log_data2 = begin_cell()
+                .store_slice(vesting_owner)
+                .store_slice(vesting_recipient)
+                .store_uint(is_auto_claim, 1)
+                .end_cell();
+                
+            log_msg = log_msg.store_ref(log_data).store_ref(log_data2);
+            
+            send_raw_message(log_msg.end_cell(), send_mode::pay_gas_separately);
+        }
+
         
         save_data(
             owner_address, 
@@ -242,7 +292,6 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
         int cancel_contract_permission = in_msg_body~load_uint(3);
         int change_recipient_permission = in_msg_body~load_uint(3);
         int forward_ton_amount = in_msg_body~load_coins();
-        slice logger_address = in_msg_body~load_msg_addr();
 
         throw_unless(39, vesting_start_time > 0);
         throw_unless(40, vesting_total_duration > 0);
@@ -374,18 +423,17 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
     if (op == op::withdraw_jettons) {
         throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
     
-        slice to_addr = in_msg_body~load_msg_addr();
         int jetton_amount = in_msg_body~load_coins();
         int forward_ton_amount = in_msg_body~load_coins();
         slice jetton_wallet_address = in_msg_body~load_msg_addr();
 
-        throw_unless(error::access_denied, equal_slices(to_addr, owner_address));
+        throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
     
         var msg_body = begin_cell()
             .store_uint(op::transfer, 32)
             .store_uint(query_id, 64)
             .store_coins(jetton_amount)
-            .store_slice(to_addr)
+            .store_slice(sender_addr)
             .store_slice(sender_addr)
             .store_uint(0, 1)
             .store_coins(forward_ton_amount)

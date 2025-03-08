@@ -2,7 +2,7 @@ import { Address } from '@ton/core';
 import { VestingMaster } from '../../wrappers/VestingMaster';
 import { compile, NetworkProvider } from '@ton/blueprint';
 
-const MASTER_CONTRACT_ADDRESS = "EQBKaNmsGkg4wR3k7NhucEB2CTRL6F7duNTKtpsuBXROhUOY";
+const MASTER_CONTRACT_ADDRESS = "EQAtMYo9SeP2PkvrdPAFYbUTNE44O60-rKXPoEG7SdZhnDIn";
 const NEW_WALLET_CODE_PATH = "VestingWallet"; 
 
 export async function run(provider: NetworkProvider) {
