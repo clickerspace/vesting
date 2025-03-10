@@ -334,7 +334,9 @@ export class VestingWallet implements Contract {
       cancelContractPermission: result.stack.readNumber(),
       changeRecipientPermission: result.stack.readNumber(),
       claimedAmount: result.stack.readBigNumber(),
-      seqno: result.stack.readNumber(),  // seqno eklendi
+      seqno: result.stack.readNumber(),
+      loggerAddress: result.stack.readAddress(),
+      vestingMasterAddress: result.stack.readAddress(),
     };
   }
 

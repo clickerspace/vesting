@@ -205,7 +205,7 @@ export class VestingMaster implements Contract {
     const queryId = 6n;
 
     return await provider.internal(via, {
-      value: toNano("0.05"),
+      value: toNano("0.1"),
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell()
         .storeUint(VestingMasterOpcodes.withdraw_jettons, 32)

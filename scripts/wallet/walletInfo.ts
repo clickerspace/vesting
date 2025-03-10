@@ -2,7 +2,7 @@ import { Address, fromNano } from '@ton/core';
 import { VestingWallet } from '../../wrappers/VestingWallet';
 import { NetworkProvider } from '@ton/blueprint';
 
-const WALLET_CONTRACT_ADDRESS = "EQC7j71S6G8OixtM-ipvKP3OO3IiXVkLiRQ5VEuJhFE-SGaU";
+const WALLET_CONTRACT_ADDRESS = "EQC15NPd2rLyvk7hBoQKOVecqcCh3DUg2dtJf-BhxC8EiY7W";
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleString();
@@ -85,6 +85,10 @@ export async function run(provider: NetworkProvider) {
     console.log('Change Recipient Permission:', changeRecipientPermission, 
                 `(${getPermissionDescription(changeRecipientPermission)})`);
     
+    console.log('\n--- Vesting Logger and Master ---');
+    console.log('Vesting Logger Address:', vestingData.loggerAddress.toString());
+    console.log('Vesting Master Address:', vestingData.vestingMasterAddress.toString());
+
     const now = Math.floor(Date.now() / 1000);
     const progress = Math.min(
       100,
