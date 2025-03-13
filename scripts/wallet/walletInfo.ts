@@ -2,7 +2,7 @@ import { Address, fromNano } from '@ton/core';
 import { VestingWallet } from '../../wrappers/VestingWallet';
 import { NetworkProvider } from '@ton/blueprint';
 
-const WALLET_CONTRACT_ADDRESS = "EQC15NPd2rLyvk7hBoQKOVecqcCh3DUg2dtJf-BhxC8EiY7W";
+const WALLET_CONTRACT_ADDRESS = "EQCh7Kh1fGTSEzaofr8Q9GjLPQVyFWS-1x1KR5XchrIo6Xnp";
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleString();
