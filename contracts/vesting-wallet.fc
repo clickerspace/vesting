@@ -484,7 +484,6 @@ int calculate_locked_amount(int vesting_total_amount, int vesting_start_time, in
         send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
 
         claimed_amount = vesting_total_amount;
-        vesting_total_amount = 0;
         
         save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
             vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
