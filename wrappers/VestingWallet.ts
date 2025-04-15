@@ -32,6 +32,7 @@ export const VestingWalletOpcodes = {
   cancel_vesting: 0x9999,
   change_recipient: 0xaaaa,
   update_owner: 0xd3d3d3d3,
+  relock: 0xbbbb,
 } as const;
 
 export type VestingWalletConfig = {
@@ -338,6 +339,27 @@ export class VestingWallet implements Contract {
       loggerAddress: result.stack.readAddress(),
       vestingMasterAddress: result.stack.readAddress(),
     };
+  }
+
+  // relock
+  async sendRelock(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      newDuration: number;
+    }
+  ) {
+    const queryId = 7n;
+
+    return await provider.internal(via, {
+      value: toNano("0.05"),
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell()
+        .storeUint(VestingWalletOpcodes.relock, 32)
+        .storeUint(queryId, 64)
+        .storeUint(opts.newDuration, 32)
+        .endCell(),
+    });
   }
 
   // updateOwner

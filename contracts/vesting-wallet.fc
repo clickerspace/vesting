@@ -10,10 +10,13 @@ const int op::withdraw_jettons = 0x7777;
 const int op::claim_unlocked = 0x8888;
 const int op::cancel_vesting = 0x9999;
 const int op::change_recipient = 0xaaaa;
+const int op::relock = 0xbbbb;
+const int op::split_vesting = 0x7890; ;; Split vesting operation code
 
 ;; Logger Operations
 const int op::update_recipient = 0xd2d2d2d2;
 const int op::update_owner = 0xd3d3d3d3;
+const int op::register_wallet = 0xd4d4d4d4; ;; Logger operation for registering a new wallet
 
 ;; Permission Constants
 const int permission::only_recipient = 1;
@@ -247,6 +250,70 @@ int calculate_locked_amount(int vesting_total_amount, int vesting_start_time, in
     send_raw_message(log_msg.end_cell(), send_mode::pay_gas_separately);
 }
 
+
+;; Calculate vesting contract state init
+cell calculate_vesting_state_init(
+    slice owner_address, slice recipient_address, slice jetton_master_address,
+    int vesting_total_amount, int vesting_start_time, int vesting_total_duration, 
+    int unlock_period, int cliff_duration, int is_auto_claim, 
+    int cancel_contract_permission, int change_recipient_permission,
+    int claimed_amount, int seqno, slice logger_address, slice vesting_master_address
+) inline {
+    ;; Pack the initial data
+    int packed_params = (vesting_start_time << 96) | 
+    (vesting_total_duration << 64) | 
+    (unlock_period << 32) | 
+                       cliff_duration;
+
+    cell cell1 = begin_cell()
+        .store_slice(owner_address)
+        .end_cell();
+    
+    cell cell2 = begin_cell()
+        .store_slice(recipient_address)
+        .store_slice(jetton_master_address)
+        .end_cell();
+    
+    cell cell3 = begin_cell()
+        .store_coins(vesting_total_amount)
+        .store_uint(packed_params, 128)
+        .store_uint(is_auto_claim, 1)
+        .store_uint(cancel_contract_permission, 3)
+        .store_uint(change_recipient_permission, 3)
+        .end_cell();
+    
+    cell cell4 = begin_cell()
+        .store_coins(claimed_amount)
+        .store_uint(seqno, 32)
+        .store_slice(logger_address)
+        .store_slice(vesting_master_address)
+        .end_cell();
+    
+    cell data = begin_cell()
+        .store_ref(cell1)
+        .store_ref(cell2)
+        .store_ref(cell3)
+        .store_ref(cell4)
+        .end_cell();
+    
+    return begin_cell()
+        .store_uint(0, 2)
+        .store_dict(my_code())
+        .store_dict(data)
+        .store_uint(0, 1)
+        .end_cell();
+}
+
+;; Calculate contract address from state init
+slice calculate_contract_address(cell state_init) inline {
+    return begin_cell()
+        .store_uint(4, 3)
+        .store_int(0, 8)
+        .store_uint(cell_hash(state_init), 256)
+        .end_cell()
+        .begin_parse();
+}
+
 () recv_external(slice in_msg) impure {
     int msg_seqno = in_msg~load_uint(32);
     int valid_until = in_msg~load_uint(32);
@@ -326,13 +393,154 @@ int calculate_locked_amount(int vesting_total_amount, int vesting_start_time, in
     int op = in_msg_body~load_uint(32);
     int query_id = in_msg_body~load_uint(64);
 
+    ;; Handle transfer notification
     if (op == op::transfer_notification) {
         int jetton_amount = in_msg_body~load_coins();
         slice from_address = in_msg_body~load_msg_addr();
     
         ;; Check if transfer is from vesting master
-        throw_unless(error::access_denied, equal_slices(from_address, vesting_master_address));
+        if(equal_slices(from_address, vesting_master_address)) {
+            ;; don't increment vesting amount if transfer is from vesting master,
+            ;; because it's already included in the vesting amount with state_init
+            return();
+        }
+
+        ;; Add vesting amount
+        if(equal_slices(from_address, owner_address)) {
+            vesting_total_amount += jetton_amount;
+            
+            save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
+                vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
+                is_auto_claim, cancel_contract_permission, change_recipient_permission,
+                claimed_amount, seqno, logger_address, vesting_master_address);
+        }
        
+        return ();
+    }
+
+    ;; Relock (extend vesting duration)
+    if (op == op::relock) {
+        throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
+        
+        int new_duration = in_msg_body~load_uint(32);
+        vesting_total_duration += new_duration;
+        
+        save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
+            vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
+            is_auto_claim, cancel_contract_permission, change_recipient_permission,
+            claimed_amount, seqno, logger_address, vesting_master_address);
+            
+        return();
+    }
+
+    ;; Split vesting implementation
+    if (op == op::split_vesting) {
+        ;; Check permission - only owner or recipient can split
+        throw_unless(error::access_denied, 
+            check_permission(sender_addr, owner_address, recipient_address, permission::both));
+        
+        ;; Parse parameters
+        int split_amount = in_msg_body~load_coins();
+        slice new_recipient_address = in_msg_body~load_msg_addr();
+        int forward_ton_amount = in_msg_body~load_coins();
+        slice jetton_wallet_address = in_msg_body~load_msg_addr();
+        
+        ;; Check if the split amount is valid
+        int remaining_amount = vesting_total_amount - claimed_amount;
+        throw_unless(error::invalid_amount, (split_amount > 0) & (split_amount < remaining_amount));
+        
+        ;; Calculate new vesting parameters for both contracts
+        ;; Original contract will have reduced amount
+        int new_total_amount = vesting_total_amount - split_amount;
+        
+        ;; Create state init for new vesting contract
+        cell state_init = calculate_vesting_state_init(
+            owner_address,
+            new_recipient_address,
+            jetton_master_address,
+            split_amount,
+            vesting_start_time,
+            vesting_total_duration,
+            unlock_period,
+            cliff_duration,
+            is_auto_claim,
+            cancel_contract_permission,
+            change_recipient_permission,
+            0, ;; claimed amount starts at 0
+            0, ;; seqno starts at 0
+            logger_address,
+            my_address() ;; Use current wallet as master for new vesting
+        );
+        
+        ;; Calculate new contract address
+        slice new_contract_address = calculate_contract_address(state_init);
+        
+        ;; First deploy the new vesting wallet contract
+        var deploy_msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(new_contract_address)
+            .store_coins(50000000)  ;; 0.05 TON for initial balance
+            .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+            .store_ref(state_init)
+            .store_ref(begin_cell().end_cell());
+        
+        send_raw_message(deploy_msg.end_cell(), send_mode::pay_gas_separately);
+        
+        ;; Then transfer tokens to the new vesting contract
+        var transfer_body = begin_cell()
+            .store_uint(op::transfer, 32)
+            .store_uint(query_id, 64)
+            .store_coins(split_amount)
+            .store_slice(new_contract_address)
+            .store_slice(sender_addr)
+            .store_uint(0, 1) ;; No custom payload
+            .store_coins(forward_ton_amount) ;; Forward amount
+            .store_uint(0, 1) ;; No state init flag because we already deployed it
+            .end_cell();
+            
+        var msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(jetton_wallet_address)
+            .store_coins(forward_ton_amount + gas::jetton_transfer)
+            .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .store_ref(transfer_body);
+        
+        send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
+        
+        ;; Logger for the new vesting wallet
+        if ((~ null?(logger_address)) & (logger_address.preload_uint(2) != 0)) {
+            var log_msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(logger_address)
+            .store_coins(10000000)
+            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .store_uint(op::register_wallet, 32)
+            .store_uint(query_id, 64);
+            
+            cell log_data = begin_cell()
+                .store_slice(new_contract_address)
+                .store_slice(jetton_master_address)
+                .end_cell();
+                
+            cell log_data2 = begin_cell()
+                .store_slice(owner_address)
+                .store_slice(new_recipient_address)
+                .store_uint(is_auto_claim, 1)
+                .end_cell();
+                
+            log_msg = log_msg.store_ref(log_data).store_ref(log_data2);
+            
+            send_raw_message(log_msg.end_cell(), send_mode::pay_gas_separately);
+        }
+        
+        ;; Update the current contract with reduced amount
+        vesting_total_amount = new_total_amount;
+        
+        save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
+            vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
+            is_auto_claim, cancel_contract_permission, change_recipient_permission,
+            claimed_amount, seqno, logger_address, vesting_master_address);
+        
         return ();
     }
 
@@ -368,6 +576,7 @@ int calculate_locked_amount(int vesting_total_amount, int vesting_start_time, in
             send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
         }
         
+        ;; Update contract state - set vesting_total_amount to claimed_amount to mark as fully claimed
         save_data(owner_address, recipient_address, jetton_master_address, claimed_amount,
             vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
             is_auto_claim, cancel_contract_permission, change_recipient_permission, 
@@ -638,4 +847,123 @@ int get_vesting_total_amount() method_id {
 int get_seqno() method_id {
     var (_, _, _, _, _, _, _, _, _, _, _, _, seqno, _, _) = load_data();
     return seqno;
+}
+
+;; Get remaining amount (total - claimed)
+int get_remaining_amount() method_id {
+    var (_, _, _, vesting_total_amount, _, _, _, _, _, _, _, claimed_amount, _, _, _) = load_data();
+    return vesting_total_amount - claimed_amount;
+}
+
+;; Get vesting start time
+int get_vesting_start_time() method_id {
+    var (_, _, _, _, vesting_start_time, _, _, _, _, _, _, _, _, _, _) = load_data();
+    return vesting_start_time;
+}
+
+;; Get vesting total duration
+int get_vesting_total_duration() method_id {
+    var (_, _, _, _, _, vesting_total_duration, _, _, _, _, _, _, _, _, _) = load_data();
+    return vesting_total_duration;
+}
+
+;; Get unlock period
+int get_unlock_period() method_id {
+    var (_, _, _, _, _, _, unlock_period, _, _, _, _, _, _, _, _) = load_data();
+    return unlock_period;
+}
+
+;; Get cliff duration
+int get_cliff_duration() method_id {
+    var (_, _, _, _, _, _, _, cliff_duration, _, _, _, _, _, _, _) = load_data();
+    return cliff_duration;
+}
+
+;; Get vesting master address
+slice get_vesting_master_address() method_id {
+    var (_, _, _, _, _, _, _, _, _, _, _, _, _, _, vesting_master_address) = load_data();
+    return vesting_master_address;
+}
+
+;; Get jetton master address
+slice get_jetton_master_address() method_id {
+    var (_, _, jetton_master_address, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
+    return jetton_master_address;
+}
+
+;; Predict the address of a split vesting wallet
+slice predict_split_vesting_address(
+    slice owner_address,
+    slice new_recipient_address,
+    slice jetton_master_address,
+    int split_amount,
+    int vesting_start_time,
+    int vesting_total_duration,
+    int unlock_period,
+    int cliff_duration,
+    int is_auto_claim,
+    int cancel_contract_permission,
+    int change_recipient_permission,
+    slice logger_address,
+    slice vesting_master_address
+) method_id {
+    ;; State init oluştur
+    cell state_init = calculate_vesting_state_init(
+        owner_address,
+        new_recipient_address,
+        jetton_master_address,
+        split_amount,
+        vesting_start_time,
+        vesting_total_duration,
+        unlock_period,
+        cliff_duration,
+        is_auto_claim,
+        cancel_contract_permission,
+        change_recipient_permission,
+        0, ;; claimed amount
+        0, ;; seqno
+        logger_address,
+        vesting_master_address
+    );
+    
+    ;; Adresi hesapla
+    return calculate_contract_address(state_init);
+}
+
+;; User-friendly method to predict split vesting address
+(slice, int) get_future_split_address(
+    slice new_recipient_address, 
+    int split_amount
+) method_id {
+    ;; Mevcut vesting parametrelerini yükle
+    var (owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
+        vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
+        is_auto_claim, cancel_contract_permission, change_recipient_permission, 
+        claimed_amount, seqno, logger_address, vesting_master_address) = load_data();
+    
+    ;; Kalan miktar kontrolü
+    int remaining_amount = vesting_total_amount - claimed_amount;
+    if (split_amount > remaining_amount) {
+        return (null(), 0); ;; Geçersiz miktar
+    }
+    
+    ;; Adresi hesapla
+    slice future_address = predict_split_vesting_address(
+        owner_address,
+        new_recipient_address,
+        jetton_master_address,
+        split_amount,
+        vesting_start_time,
+        vesting_total_duration,
+        unlock_period,
+        cliff_duration,
+        is_auto_claim,
+        cancel_contract_permission,
+        change_recipient_permission,
+        logger_address,
+        my_address()  ;; Use current address as master
+    );
+    
+    ;; Adresi ve kalan miktarı döndür
+    return (future_address, remaining_amount - split_amount);
 }
