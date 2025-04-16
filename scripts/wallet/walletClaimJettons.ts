@@ -2,14 +2,14 @@ import { Address, fromNano, toNano } from '@ton/core';
 import { VestingWallet } from '../../wrappers/VestingWallet';
 import { NetworkProvider } from '@ton/blueprint';
 
-const WALLET_CONTRACT_ADDRESS = "EQC15NPd2rLyvk7hBoQKOVecqcCh3DUg2dtJf-BhxC8EiY7W";
-const WALLET_JETTON_ADDRESS = "EQCQhzGnGX3_w1Gu31pMw1Zzf5v5qtxxCwNrBi98-5Floa0l";
+const VESTING_WALLET_CONTRACT_ADDRESS = "EQDqELzrZrYZYw-12Y0oUW2PKkXab1AL-TlEaj9z505vD6WX";
+const WALLET_JETTON_ADDRESS = "EQA65HBcnJoIS_k3vxzmfFHgw2bWjVjCZv6mBoB7-4lIUPiA";
 
 export async function run(provider: NetworkProvider) {
   try {
     console.log('Checking claimable tokens...');
     
-    const walletAddress = Address.parse(WALLET_CONTRACT_ADDRESS);
+    const walletAddress = Address.parse(VESTING_WALLET_CONTRACT_ADDRESS);
     const vestingWallet = provider.open(VestingWallet.createFromAddress(walletAddress));
     
     const claimableAmount = await vestingWallet.getClaimableAmount();
@@ -35,13 +35,7 @@ export async function run(provider: NetworkProvider) {
     
     console.log('Claim transaction sent successfully!');
     console.log(`Claimed amount: ${fromNano(claimableAmount)} tokens`);
-    
-    try {
-      const remainingClaimable = await vestingWallet.getClaimableAmount();
-      if (remainingClaimable > 0n) {
-        console.log(`\nNote: There are still ${fromNano(remainingClaimable)} tokens available to claim.`);
-      }
-    } catch (e) {}
+
     
     return {
       success: true,

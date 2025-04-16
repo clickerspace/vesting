@@ -2,7 +2,7 @@ import { Address, toNano } from '@ton/core';
 import { VestingWallet } from '../../wrappers/VestingWallet';
 import { NetworkProvider } from '@ton/blueprint';
 
-const WALLET_CONTRACT_ADDRESS = "EQC15NPd2rLyvk7hBoQKOVecqcCh3DUg2dtJf-BhxC8EiY7W";
+const VESTING_WALLET_CONTRACT_ADDRESS = "EQAvPePAY56rPqNxWb5UcJVBGEt8utakfclW_yuNukJRqui7";
 const RECIPIENT_ADDRESS = "0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5";
 const WALLET_JETTON_ADDRESS = "EQCQhzGnGX3_w1Gu31pMw1Zzf5v5qtxxCwNrBi98-5Floa0l";
 
@@ -10,7 +10,7 @@ const TOKEN_AMOUNT = 100;
 
 export async function run(provider: NetworkProvider) {
   try {
-    const walletAddress = Address.parse(WALLET_CONTRACT_ADDRESS);
+    const walletAddress = Address.parse(VESTING_WALLET_CONTRACT_ADDRESS);
     const recipientAddress = Address.parse(RECIPIENT_ADDRESS);
     const amount = toNano(TOKEN_AMOUNT);
     

@@ -2,7 +2,7 @@ import { toNano, fromNano, Address } from '@ton/core';
 import { VestingMaster } from '../../wrappers/VestingMaster';
 import { compile, NetworkProvider } from '@ton/blueprint';
 
-const LOGGER_CONTRACT_ADDRESS = "EQCOCCo7mtu_VmkaA7OLH6GZaUktWNUQ0X2s9x8YNOSGdCM4";
+const LOGGER_CONTRACT_ADDRESS = "EQAfX02OTBZbatuDEMnOIzwzkyUjpMh_Bp5duUanOK2xkw4-";
 
 export async function run(provider: NetworkProvider) {
   try {

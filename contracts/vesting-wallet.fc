@@ -16,7 +16,7 @@ const int op::split_vesting = 0x7890; ;; Split vesting operation code
 ;; Logger Operations
 const int op::update_recipient = 0xd2d2d2d2;
 const int op::update_owner = 0xd3d3d3d3;
-const int op::register_wallet = 0xd4d4d4d4; ;; Logger operation for registering a new wallet
+const int op::register_wallet = 0xd1d1d1d1;
 
 ;; Permission Constants
 const int permission::only_recipient = 1;
@@ -206,7 +206,8 @@ int calculate_unlocked_amount(int vesting_total_amount, int vesting_start_time, 
     int unlock_intervals = vesting_total_duration / unlock_period;
     int amount_per_interval = vesting_total_amount / unlock_intervals;
   
-    int intervals_passed = (time_passed - cliff_duration) / unlock_period + 1;
+    ;;int intervals_passed = (time_passed - cliff_duration) / unlock_period + 1;
+    int intervals_passed = (time_passed - cliff_duration) / unlock_period; ;; solved periodic early unlock issue
     if (intervals_passed > unlock_intervals) {
         intervals_passed = unlock_intervals;
     }
@@ -441,6 +442,7 @@ slice calculate_contract_address(cell state_init) inline {
         
         ;; Parse parameters
         int split_amount = in_msg_body~load_coins();
+        slice new_owner_address = in_msg_body~load_msg_addr();
         slice new_recipient_address = in_msg_body~load_msg_addr();
         int forward_ton_amount = in_msg_body~load_coins();
         slice jetton_wallet_address = in_msg_body~load_msg_addr();
@@ -455,7 +457,7 @@ slice calculate_contract_address(cell state_init) inline {
         
         ;; Create state init for new vesting contract
         cell state_init = calculate_vesting_state_init(
-            owner_address,
+            new_owner_address,
             new_recipient_address,
             jetton_master_address,
             split_amount,
@@ -493,9 +495,9 @@ slice calculate_contract_address(cell state_init) inline {
             .store_coins(split_amount)
             .store_slice(new_contract_address)
             .store_slice(sender_addr)
-            .store_uint(0, 1) ;; No custom payload
-            .store_coins(forward_ton_amount) ;; Forward amount
-            .store_uint(0, 1) ;; No state init flag because we already deployed it
+            .store_uint(0, 1)
+            .store_coins(forward_ton_amount)
+            .store_uint(0, 1)
             .end_cell();
             
         var msg = begin_cell()
@@ -523,7 +525,7 @@ slice calculate_contract_address(cell state_init) inline {
                 .end_cell();
                 
             cell log_data2 = begin_cell()
-                .store_slice(owner_address)
+                .store_slice(new_owner_address)
                 .store_slice(new_recipient_address)
                 .store_uint(is_auto_claim, 1)
                 .end_cell();

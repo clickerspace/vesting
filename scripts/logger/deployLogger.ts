@@ -16,7 +16,7 @@ export async function run(provider: NetworkProvider) {
       )
     );
 
-    const DEPLOY_AMOUNT = toNano("0.1");
+    const DEPLOY_AMOUNT = toNano("0.05");
 
     console.log("Deploying Vesting Logger contract...");
     console.log("Contract address:", vestingLogger.address.toString());

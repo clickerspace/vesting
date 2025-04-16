@@ -10,7 +10,7 @@ import {
   toNano,
 } from "@ton/core";
 
-const LOGGER_CONTRACT_ADDRESS = "EQDWQP-8NkhyAvsu6opiulNxuLqX3hKHWMxGyNiQEwi35-ak";
+const LOGGER_CONTRACT_ADDRESS = "EQA5gnXNLysfEk8l2c6bAigS6lyTy29XHn-tgqyxKIK8cDWr";
 
 // Default parameters for vesting
 export const DEFAULT_VESTING_PARAMS = {
@@ -33,6 +33,7 @@ export const VestingWalletOpcodes = {
   change_recipient: 0xaaaa,
   update_owner: 0xd3d3d3d3,
   relock: 0xbbbb,
+  split_vesting: 0x7890
 } as const;
 
 export type VestingWalletConfig = {
@@ -358,6 +359,35 @@ export class VestingWallet implements Contract {
         .storeUint(VestingWalletOpcodes.relock, 32)
         .storeUint(queryId, 64)
         .storeUint(opts.newDuration, 32)
+        .endCell(),
+    });
+  }
+
+  // splitVesting
+  async sendSplitVesting(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      splitAmount: bigint;
+      newOwnerAddress: Address;
+      newRecipientAddress: Address;
+      forwardTonAmount: bigint;
+      jettonWalletAddress: Address;
+    }
+  ) {
+    const queryId = 8n;
+
+    return await provider.internal(via, {
+      value: toNano("0.2"),
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell()
+        .storeUint(VestingWalletOpcodes.split_vesting, 32)
+        .storeUint(queryId, 64)
+        .storeCoins(opts.splitAmount)
+        .storeAddress(opts.newOwnerAddress)
+        .storeAddress(opts.newRecipientAddress)
+        .storeCoins(opts.forwardTonAmount)
+        .storeAddress(opts.jettonWalletAddress)
         .endCell(),
     });
   }

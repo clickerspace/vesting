@@ -2,7 +2,7 @@ import { Address, fromNano } from '@ton/core';
 import { VestingWallet } from '../../wrappers/VestingWallet';
 import { NetworkProvider } from '@ton/blueprint';
 
-const WALLET_CONTRACT_ADDRESS = "EQCh7Kh1fGTSEzaofr8Q9GjLPQVyFWS-1x1KR5XchrIo6Xnp";
+const VESTING_WALLET_CONTRACT_ADDRESS = "EQDqELzrZrYZYw-12Y0oUW2PKkXab1AL-TlEaj9z505vD6WX";
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleString();
@@ -36,7 +36,7 @@ export async function run(provider: NetworkProvider) {
   try {
     console.log('Fetching Vesting Wallet information...');
     
-    const walletAddress = Address.parse(WALLET_CONTRACT_ADDRESS);
+    const walletAddress = Address.parse(VESTING_WALLET_CONTRACT_ADDRESS);
     const vestingWallet = provider.open(VestingWallet.createFromAddress(walletAddress));
     
     const vestingData = await vestingWallet.getVestingData();

@@ -37,12 +37,11 @@ const mnemonic = [
   "remove",
   "toe",
 ];
-const API_KEY =
-  "006dccec833d6e1193c45e9c5eaa839f2170f2e780efb2af74cfb05a6261e99d";
+const API_KEY = 'b5982aadb3cf1211ff804df20704e55ec92439365b39858a4c3990794f080126';
 
 const JETTON_MASTER_ADDRESS =
   "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
-  const MASTER_CONTRACT_ADDRESS = "EQDNaPah2F9iPJAPLMIcBusdpPfEvHhutNSFNQzPfH9YKBpP";
+  const MASTER_CONTRACT_ADDRESS = "EQDpmZ3Eao57wQzD7U7PeU9VQq-APUUNmohJ8XK5J-w_noFK";
 
 const client = new TonClient({
   endpoint: "https://testnet.toncenter.com/api/v2/jsonRPC",
@@ -133,9 +132,9 @@ export async function run() {
     const workchain = 0;
     const wallet = WalletContractV4.create({ workchain, publicKey });
     const address = wallet.address.toString({
-      urlSafe: true,
-      bounceable: false,
-      testOnly: true,
+        urlSafe: true,
+        bounceable: false,
+        testOnly: true,
     });
     const contract = client.open(wallet);
 
@@ -170,7 +169,7 @@ export async function run() {
     const unlockPeriod = 360; // 6 minutes
     const cliffDuration = 0;
 
-    const customStartDate = new Date("2025-03-08T15:00:00Z");
+    const customStartDate = new Date("2025-04-16T10:55:00Z");
     const dateTime = Math.floor(customStartDate.getTime() / 1000);
 
     const startTime = dateTime + startDelay;
@@ -180,9 +179,7 @@ export async function run() {
     const cancelContractPermission = 2; // only_owner
     const changeRecipientPermission = 2; // only_owner
 
-    // Before transfer, calculate vesting wallet address and its jetton wallet address
-    const { vestingWalletAddress, vestingJettonWalletAddress } =
-      await getVestingWalletAddress(
+    const { vestingWalletAddress, vestingJettonWalletAddress } = await getVestingWalletAddress(
         address,
         recipientAddress,
         JETTON_MASTER_ADDRESS,
