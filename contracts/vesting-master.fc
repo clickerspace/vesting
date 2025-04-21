@@ -164,7 +164,7 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
         var msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(vesting_wallet_address)
-            .store_coins(500000000) 
+            .store_coins(500000000) ;; 0.5 TON
             .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
             .store_ref(state_init)
             .store_ref(begin_cell().end_cell());
@@ -179,14 +179,14 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
             .store_slice(vesting_wallet_address)
             .store_slice(vesting_owner)
             .store_uint(0, 1)
-            .store_coins(100000000)
+            .store_coins(100000000) ;; 0.1 TON
             .store_uint(0, 1)
             .end_cell();
 
         var msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(jetton_wallet_address)
-            .store_coins(royalty_fee + gas::jetton_transfer_master)
+            .store_coins(royalty_fee + gas::jetton_transfer_master) ;; 0.1 + 0.2 = 0.3
             .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_ref(msg_body);
         
@@ -197,7 +197,7 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
             var log_msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(logger_address)
-            .store_coins(10000000)
+            .store_coins(10000000) ;; 0.1 TON
             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_uint(op::register_wallet, 32)
             .store_uint(query_id, 64);
