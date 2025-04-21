@@ -1,76 +1,6 @@
 #include "imports/stdlib.fc";
 #include "imports/utils.fc";
 
-;; Jetton Standard Operations (TEP-74)
-const int op::transfer = 0xf8a7ea5;
-const int op::transfer_notification = 0x7362d09c;
-
-;; Vesting Wallet Operations
-const int op::withdraw_jettons = 0x7777;
-const int op::claim_unlocked = 0x8888;
-const int op::cancel_vesting = 0x9999;
-const int op::change_recipient = 0xaaaa;
-const int op::relock = 0xbbbb;
-const int op::split_vesting = 0x7890; ;; Split vesting operation code
-
-;; Logger Operations
-const int op::update_recipient = 0xd2d2d2d2;
-const int op::update_owner = 0xd3d3d3d3;
-const int op::register_wallet = 0xd1d1d1d1;
-
-;; Permission Constants
-const int permission::only_recipient = 1;
-const int permission::only_owner = 2;
-const int permission::both = 3;
-const int permission::neither = 4;
-
-;; Common Errors
-const int error::invalid_op = 0xffff;
-const int error::access_denied = 0xffa0;
-const int error::invalid_amount = 0xffa2;
-
-;; Send Modes
-const int send_mode::regular = 0; ;; Pay fee separately
-const int send_mode::pay_gas_separately = 1; ;; Pay fees separately, ignore errors
-const int send_mode::carry_remaining_gas = 64; ;; Carry all the remaining value of the inbound message
-const int send_mode::carry_all_balance = 128; ;; Carry all the remaining balance of the contract
-const int send_mode::destroy = 32; ;; Destroy the contract after the message is sent
-
-;; Gas Constants
-const int gas::jetton_transfer = 100000000; ;; 0.1 TON
-const int gas::logger_message = 100000000; ;; 0.1 TON
-
-;; Vesting Constants
-const int vesting::min_period = 60; ;; Minimum vesting period in seconds (1 minute)
-const int vesting::max_period = 4294967295; ;; Maximum vesting period in seconds (~136 years)
-const int vesting::min_amount = 1000000000; ;; Minimum vesting amount (1 JETTON in nanotons)
-
-;; address utils
-const int ADDRESS_SIZE = 267; ;; 256 + 8
-
-(int, int) unpack_address(slice address) inline {
-    int wc = address~load_int(8);
-    int address_hash = address~load_uint(256);
-    return (wc, address_hash);
-}
-
-slice pack_address(slice address) inline {
-    (int wc, int address_hash) = parse_std_addr(address);
-    return begin_cell().store_int(wc, 8).store_uint(address_hash, 256).end_cell().begin_parse();
-}
-
-;; Helper to compare two addresses
-int equal_slices(slice a, slice b) {
-    return a.slice_hash() == b.slice_hash();
-}
-
-;; Updated Storage TL-B scheme for Vesting Wallet - split into multiple cells
-;; Storage structure is now:
-;; storage#_ ^[owner_address:MsgAddress] ^[recipient_address:MsgAddress jetton_master_address:MsgAddress]
-;;           ^[vesting_total_amount:Coins packed_params:uint128 is_auto_claim:uint1 
-;;             cancel_contract_permission:uint3 change_recipient_permission:uint3]
-;;           ^[claimed_amount:Coins seqno:uint32] ^[logger_address:MsgAddress] = Storage;
-
 ;; Unpack vesting parameters from packed format
 (int, int, int, int) unpack_vesting_params(int packed_params) inline {
     int vesting_start_time = (packed_params >> 96) & 0xFFFFFFFF;
@@ -357,7 +287,7 @@ slice calculate_contract_address(cell state_init) inline {
     var msg = begin_cell()
         .store_uint(0x18, 6)
         .store_slice(jetton_wallet_address)
-        .store_coins(forward_ton_amount + gas::jetton_transfer)
+        .store_coins(forward_ton_amount + gas::jetton_transfer_wallet)
         .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
         .store_ref(msg_body);
 
@@ -503,7 +433,7 @@ slice calculate_contract_address(cell state_init) inline {
         var msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(jetton_wallet_address)
-            .store_coins(forward_ton_amount + gas::jetton_transfer)
+            .store_coins(forward_ton_amount + gas::jetton_transfer_wallet)
             .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_ref(transfer_body);
         
@@ -571,7 +501,7 @@ slice calculate_contract_address(cell state_init) inline {
             var msg = begin_cell()
                 .store_uint(0x18, 6)
                 .store_slice(jetton_wallet_address)
-                .store_coins(forward_ton_amount + gas::jetton_transfer) ;; gas
+                .store_coins(forward_ton_amount + gas::jetton_transfer_wallet) ;; gas
                 .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                 .store_ref(msg_body);
             
@@ -648,7 +578,7 @@ slice calculate_contract_address(cell state_init) inline {
         var msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(jetton_wallet_address)
-            .store_coins(forward_ton_amount + gas::jetton_transfer)
+            .store_coins(forward_ton_amount + gas::jetton_transfer_wallet)
             .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_ref(msg_body);
 
@@ -688,7 +618,7 @@ slice calculate_contract_address(cell state_init) inline {
         var msg = begin_cell()
             .store_uint(0x18, 6)
             .store_slice(jetton_wallet_address)
-            .store_coins(forward_ton_amount + gas::jetton_transfer)
+            .store_coins(forward_ton_amount + gas::jetton_transfer_wallet)
             .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_ref(msg_body);
         
@@ -891,81 +821,4 @@ slice get_vesting_master_address() method_id {
 slice get_jetton_master_address() method_id {
     var (_, _, jetton_master_address, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
     return jetton_master_address;
-}
-
-;; Predict the address of a split vesting wallet
-slice predict_split_vesting_address(
-    slice owner_address,
-    slice new_recipient_address,
-    slice jetton_master_address,
-    int split_amount,
-    int vesting_start_time,
-    int vesting_total_duration,
-    int unlock_period,
-    int cliff_duration,
-    int is_auto_claim,
-    int cancel_contract_permission,
-    int change_recipient_permission,
-    slice logger_address,
-    slice vesting_master_address
-) method_id {
-    ;; State init oluştur
-    cell state_init = calculate_vesting_state_init(
-        owner_address,
-        new_recipient_address,
-        jetton_master_address,
-        split_amount,
-        vesting_start_time,
-        vesting_total_duration,
-        unlock_period,
-        cliff_duration,
-        is_auto_claim,
-        cancel_contract_permission,
-        change_recipient_permission,
-        0, ;; claimed amount
-        0, ;; seqno
-        logger_address,
-        vesting_master_address
-    );
-    
-    ;; Adresi hesapla
-    return calculate_contract_address(state_init);
-}
-
-;; User-friendly method to predict split vesting address
-(slice, int) get_future_split_address(
-    slice new_recipient_address, 
-    int split_amount
-) method_id {
-    ;; Mevcut vesting parametrelerini yükle
-    var (owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
-        vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
-        is_auto_claim, cancel_contract_permission, change_recipient_permission, 
-        claimed_amount, seqno, logger_address, vesting_master_address) = load_data();
-    
-    ;; Kalan miktar kontrolü
-    int remaining_amount = vesting_total_amount - claimed_amount;
-    if (split_amount > remaining_amount) {
-        return (null(), 0); ;; Geçersiz miktar
-    }
-    
-    ;; Adresi hesapla
-    slice future_address = predict_split_vesting_address(
-        owner_address,
-        new_recipient_address,
-        jetton_master_address,
-        split_amount,
-        vesting_start_time,
-        vesting_total_duration,
-        unlock_period,
-        cliff_duration,
-        is_auto_claim,
-        cancel_contract_permission,
-        change_recipient_permission,
-        logger_address,
-        my_address()  ;; Use current address as master
-    );
-    
-    ;; Adresi ve kalan miktarı döndür
-    return (future_address, remaining_amount - split_amount);
 }

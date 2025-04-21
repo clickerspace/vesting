@@ -1,16 +1,6 @@
 #include "imports/stdlib.fc";
 #include "imports/utils.fc";
 
-;; Operations
-const int op::register_wallet = 0xd1d1d1d1;
-const int op::update_recipient = 0xd2d2d2d2;
-const int op::update_owner = 0xd3d3d3d3;
-const int op::set_logger_address = 0x4567;
-
-;; Error codes
-const int error::access_denied = 0x1001;
-const int error::invalid_data = 0x1002;
-
 ;; Define global variables for storage
 global slice storage::owner;
 global cell storage::token_wallets;
@@ -18,11 +8,6 @@ global cell storage::owner_wallets;
 global cell storage::receiver_wallets;
 global cell storage::auto_claim_wallets;
 global int storage::init?;
-
-;; Helper to compare two addresses
-int equal_slices(slice a, slice b) {
-    return a.slice_hash() == b.slice_hash();
-}
 
 ;; Load data into global variables
 () load_data() impure inline {
@@ -347,4 +332,3 @@ slice get_owner() method_id {
     load_data();
     return storage::owner;
 }
-

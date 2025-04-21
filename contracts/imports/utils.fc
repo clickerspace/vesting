@@ -1,1 +1,84 @@
 slice null_addr() asm "b{00} PUSHSLICE";
+
+;; Helper to compare two addresses
+int equal_slices(slice a, slice b) {
+    return a.slice_hash() == b.slice_hash();
+}
+
+(int, int) unpack_address(slice address) inline {
+    int wc = address~load_int(8);
+    int address_hash = address~load_uint(256);
+    return (wc, address_hash);
+}
+
+slice pack_address(slice address) inline {
+    (int wc, int address_hash) = parse_std_addr(address);
+    return begin_cell().store_int(wc, 8).store_uint(address_hash, 256).end_cell().begin_parse();
+}
+
+;; Common Operations
+const int op::transfer = 0xf8a7ea5;
+const int op::create_vesting_wallet = 0x5fe9b8cd;
+const int op::transfer_notification = 0x7362d09c;
+
+;; Vesting Logger Operations
+const int op::register_wallet = 0xd1d1d1d1;
+const int op::set_logger_address = 0x4567;
+const int op::update_recipient = 0xd2d2d2d2;
+const int op::update_owner = 0xd3d3d3d3;
+
+;; Only Owner Operations
+const int op::update_vesting_wallet_code = 0x1234;
+const int op::change_owner = 0x2345;
+const int op::withdraw_tons = 0x3456;
+const int op::withdraw_jettons = 0x7777;
+const int op::set_royalty_fee = 0x8888;
+
+;; Vesting Wallet Operations
+const int op::claim_unlocked = 0x8888;
+const int op::cancel_vesting = 0x9999;
+const int op::change_recipient = 0xaaaa;
+const int op::relock = 0xbbbb;
+const int op::split_vesting = 0x7890;
+
+;; Error Codes
+const int error::invalid_op = 0xffff;
+const int error::access_denied = 0xffa0;
+const int error::insufficient_fee = 0xffa2;
+const int error::insufficient_balance = 0xffa3;
+const int error::invalid_amount = 0xffa2;
+const int error::invalid_data = 0xffa4;
+
+;; Send Modes
+const int send_mode::regular = 0; ;; Pay fee separately
+const int send_mode::pay_gas_separately = 1; ;; Pay fees separately, ignore errors
+const int send_mode::carry_remaining_gas = 64; ;; Carry all the remaining value of the inbound message
+const int send_mode::carry_all_balance = 128; ;; Carry all the remaining balance of the contract
+const int send_mode::destroy = 32; ;; Destroy the contract after the message is sent
+
+;; Minimum TON balance required for storage
+const int min_tons_for_storage = 50000000; ;; 0.05 TON
+
+;; Gas Constants
+const int gas::jetton_transfer_master = 200000000; ;; 0.2 TON
+const int gas::logger_message = 100000000; ;; 0.1 TON
+
+;; Permission Constants
+const int permission::only_recipient = 1;
+const int permission::only_owner = 2;
+const int permission::both = 3;
+const int permission::neither = 4;
+
+;; Gas Constants
+const int gas::jetton_transfer_wallet = 100000000; ;; 0.1 TON
+
+;; Address Size
+const int ADDRESS_SIZE = 267; ;; 256 + 8
+
+;; Default royalty fee
+const int DEFAULT_ROYALTY_FEE = 100000000; ;; 0.1 TON
+
+;; Vesting Constants
+const int vesting::min_period = 60; ;; Minimum vesting period in seconds (1 minute)
+const int vesting::max_period = 4294967295; ;; Maximum vesting period in seconds (~136 years)
+const int vesting::min_amount = 1000000000; ;; Minimum vesting amount (1 JETTON in nanotons)
