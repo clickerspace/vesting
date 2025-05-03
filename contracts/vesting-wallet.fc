@@ -10,10 +10,10 @@
     return (vesting_start_time, vesting_total_duration, unlock_period, cliff_duration);
 }
 
-(slice, slice, slice, int, int, int, int, int, int, int, int, int, int, slice, slice) load_data() inline {
+(slice, slice, slice, int, int, int, int, int, int, int, int, int, int, slice, slice, int, int) load_data() inline {
     var ds = get_data().begin_parse();
     if (ds.slice_empty?()) {
-        return (null(), null(), null(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null(), null());
+        return (null(), null(), null(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null(), null(), 0, 5);
     }
 
     cell cell1 = ds~load_ref();
@@ -39,6 +39,8 @@
     int seqno = data4~load_uint(32);
     slice logger_address = data4~load_msg_addr();
     slice vesting_master_address = data4~load_msg_addr();
+    int splits_count = data4~load_uint(8);
+    int max_splits = data4~load_uint(8);
     
     (int vesting_start_time, int vesting_total_duration, int unlock_period, int cliff_duration) = unpack_vesting_params(packed_params);
 
@@ -57,7 +59,9 @@
         claimed_amount,
         seqno,
         logger_address,
-        vesting_master_address
+        vesting_master_address,
+        splits_count,
+        max_splits
     );
 }
 
@@ -66,7 +70,8 @@
     int vesting_start_time, int vesting_total_duration, 
     int unlock_period, int cliff_duration, 
     int is_auto_claim, int cancel_contract_permission, int change_recipient_permission,
-    int claimed_amount, int seqno, slice logger_address, slice vesting_master_address) impure inline {
+    int claimed_amount, int seqno, slice logger_address, slice vesting_master_address, 
+    int splits_count, int max_splits) impure inline {
     
     int packed_params = (vesting_start_time << 96) | 
     (vesting_total_duration << 64) | 
@@ -95,6 +100,8 @@
         .store_uint(seqno, 32)
         .store_slice(logger_address)
         .store_slice(vesting_master_address)
+        .store_uint(splits_count, 8)
+        .store_uint(max_splits, 8)
         .end_cell();
     
     set_data(
@@ -134,19 +141,28 @@ int calculate_unlocked_amount(int vesting_total_amount, int vesting_start_time, 
     }
   
     int unlock_intervals = vesting_total_duration / unlock_period;
+    
+    ;; If the total vesting duration has passed, return the full amount
+    if (time_passed >= vesting_total_duration) {
+        return vesting_total_amount;
+    }
+    
+    int intervals_passed = (time_passed - cliff_duration) / unlock_period;
+    
+    ;; Last period check (last period gets all remaining tokens)
+    if (intervals_passed == unlock_intervals - 1) {
+        ;; Standard calculation except for the last period
+        int base_per_interval = vesting_total_amount / unlock_intervals;
+        int previous_periods_amount = base_per_interval * (unlock_intervals - 1);
+        
+        ;; Last period: Subtract the sum of previous periods from the total amount = remaining tokens
+        return previous_periods_amount + (vesting_total_amount - previous_periods_amount);
+    }
+    
+    ;; Standard calculation for normal periods
     int amount_per_interval = vesting_total_amount / unlock_intervals;
-  
-    ;;int intervals_passed = (time_passed - cliff_duration) / unlock_period + 1;
-    int intervals_passed = (time_passed - cliff_duration) / unlock_period; ;; solved periodic early unlock issue
-    if (intervals_passed > unlock_intervals) {
-        intervals_passed = unlock_intervals;
-    }
-  
     int unlocked_amount = intervals_passed * amount_per_interval;
-    if (unlocked_amount > vesting_total_amount) {
-        unlocked_amount = vesting_total_amount;
-    }
-  
+    
     return unlocked_amount;
 }
 
@@ -181,14 +197,14 @@ int calculate_locked_amount(int vesting_total_amount, int vesting_start_time, in
     send_raw_message(log_msg.end_cell(), send_mode::pay_gas_separately);
 }
 
-
 ;; Calculate vesting contract state init
 cell calculate_vesting_state_init(
     slice owner_address, slice recipient_address, slice jetton_master_address,
     int vesting_total_amount, int vesting_start_time, int vesting_total_duration, 
     int unlock_period, int cliff_duration, int is_auto_claim, 
     int cancel_contract_permission, int change_recipient_permission,
-    int claimed_amount, int seqno, slice logger_address, slice vesting_master_address
+    int claimed_amount, int seqno, slice logger_address, slice vesting_master_address,
+    int splits_count, int max_splits
 ) inline {
     ;; Pack the initial data
     int packed_params = (vesting_start_time << 96) | 
@@ -218,6 +234,8 @@ cell calculate_vesting_state_init(
         .store_uint(seqno, 32)
         .store_slice(logger_address)
         .store_slice(vesting_master_address)
+        .store_uint(splits_count, 8)
+        .store_uint(max_splits, 8)
         .end_cell();
     
     cell data = begin_cell()
@@ -252,7 +270,7 @@ slice calculate_contract_address(cell state_init) inline {
     var (owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
         vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
         is_auto_claim, cancel_contract_permission, change_recipient_permission, 
-        claimed_amount, seqno, logger_address, vesting_master_address) = load_data();
+        claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits) = load_data();
     
     throw_unless(33, msg_seqno == seqno);
     throw_if(34, valid_until <= now());
@@ -299,7 +317,7 @@ slice calculate_contract_address(cell state_init) inline {
     save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
         vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
         is_auto_claim, cancel_contract_permission, change_recipient_permission,
-        claimed_amount, seqno, logger_address, vesting_master_address);
+        claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits);
 }
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
@@ -319,7 +337,7 @@ slice calculate_contract_address(cell state_init) inline {
     var (owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
         vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
         is_auto_claim, cancel_contract_permission, change_recipient_permission, 
-        claimed_amount, seqno, logger_address, vesting_master_address) = load_data();
+        claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits) = load_data();
   
     int op = in_msg_body~load_uint(32);
     int query_id = in_msg_body~load_uint(64);
@@ -343,7 +361,7 @@ slice calculate_contract_address(cell state_init) inline {
             save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
                 vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
                 is_auto_claim, cancel_contract_permission, change_recipient_permission,
-                claimed_amount, seqno, logger_address, vesting_master_address);
+                claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits);
         }
        
         return ();
@@ -359,12 +377,12 @@ slice calculate_contract_address(cell state_init) inline {
         save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
             vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
             is_auto_claim, cancel_contract_permission, change_recipient_permission,
-            claimed_amount, seqno, logger_address, vesting_master_address);
+            claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits);
             
         return();
     }
 
-    ;; Split vesting implementation
+    ;; Split vesting
     if (op == op::split_vesting) {
         ;; Check permission - only owner or recipient can split
         throw_unless(error::access_denied, 
@@ -377,9 +395,14 @@ slice calculate_contract_address(cell state_init) inline {
         int forward_ton_amount = in_msg_body~load_coins();
         slice jetton_wallet_address = in_msg_body~load_msg_addr();
         
-        ;; Check if the split amount is valid
         int remaining_amount = vesting_total_amount - claimed_amount;
-        throw_unless(error::invalid_amount, (split_amount > 0) & (split_amount < remaining_amount));
+        int min_split_amount = 1000000000; ;; 1 TON
+        
+        ;; Check if the split amount is valid and above minimum threshold
+        throw_unless(error::invalid_amount, (split_amount >= min_split_amount) & (split_amount < remaining_amount));
+        
+        ;; Check if maximum splits limit has been reached
+        throw_unless(error::max_splits_reached, splits_count < max_splits);
         
         ;; Calculate new vesting parameters for both contracts
         ;; Original contract will have reduced amount
@@ -401,7 +424,9 @@ slice calculate_contract_address(cell state_init) inline {
             0, ;; claimed amount starts at 0
             0, ;; seqno starts at 0
             logger_address,
-            my_address() ;; Use current wallet as master for new vesting
+            my_address(), ;; current wallet as master for new vesting
+            0,  ;; splits
+            max_splits ;; max_splits
         );
         
         ;; Calculate new contract address
@@ -465,13 +490,14 @@ slice calculate_contract_address(cell state_init) inline {
             send_raw_message(log_msg.end_cell(), send_mode::pay_gas_separately);
         }
         
-        ;; Update the current contract with reduced amount
+        ;; Update the current contract with reduced amount and increment splits count
         vesting_total_amount = new_total_amount;
+        splits_count += 1;
         
         save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
             vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
             is_auto_claim, cancel_contract_permission, change_recipient_permission,
-            claimed_amount, seqno, logger_address, vesting_master_address);
+            claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits);
         
         return ();
     }
@@ -512,7 +538,7 @@ slice calculate_contract_address(cell state_init) inline {
         save_data(owner_address, recipient_address, jetton_master_address, claimed_amount,
             vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
             is_auto_claim, cancel_contract_permission, change_recipient_permission, 
-            claimed_amount, seqno, logger_address, vesting_master_address);
+            claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits);
         
         return ();
     }
@@ -545,7 +571,7 @@ slice calculate_contract_address(cell state_init) inline {
         save_data(owner_address, new_recipient_address, jetton_master_address, vesting_total_amount,
             vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
             is_auto_claim, cancel_contract_permission, change_recipient_permission, 
-            claimed_amount, seqno, logger_address, vesting_master_address);
+            claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits);
         
         return ();
     }
@@ -589,7 +615,7 @@ slice calculate_contract_address(cell state_init) inline {
         save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
             vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
             is_auto_claim, cancel_contract_permission, change_recipient_permission,
-            claimed_amount, seqno, logger_address, vesting_master_address);
+            claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits);
         return ();
     }
 
@@ -629,7 +655,7 @@ slice calculate_contract_address(cell state_init) inline {
         save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
             vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
             is_auto_claim, cancel_contract_permission, change_recipient_permission,
-            claimed_amount, seqno, logger_address, vesting_master_address);
+            claimed_amount, seqno, logger_address,vesting_master_address, splits_count, max_splits);
 
         return ();
     }
@@ -661,7 +687,7 @@ slice calculate_contract_address(cell state_init) inline {
         save_data(new_owner_address, recipient_address, jetton_master_address, vesting_total_amount,
             vesting_start_time, vesting_total_duration, unlock_period, cliff_duration, 
             is_auto_claim, cancel_contract_permission, change_recipient_permission, 
-            claimed_amount, seqno, logger_address, vesting_master_address);
+            claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits);
         
         return ();
     }
@@ -672,62 +698,62 @@ slice calculate_contract_address(cell state_init) inline {
 ;; Get Methods
 
 ;; Get vesting parameters
-(slice, slice, slice, int, int, int, int, int, int, int, int, int, int, slice, slice) get_vesting_data() method_id {
+(slice, slice, slice, int, int, int, int, int, int, int, int, int, int, slice, slice, int, int) get_vesting_data() method_id {
     return load_data();
 }
 
 ;; Get owner address
 slice get_owner() method_id {
-    var (owner_address, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
+    var (owner_address, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
     return owner_address;
 }
 
 ;; Get recipient address
 slice get_recipient() method_id {
-    var (_, recipient_address, _, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
+    var (_, recipient_address, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
     return recipient_address;
 }
 
 ;; Get cancel permission
 int get_cancel_contract_permission() method_id {
-    var (_, _, _, _, _, _, _, _, _, cancel_contract_permission, _, _, _, _, _) = load_data();
+    var (_, _, _, _, _, _, _, _, _, cancel_contract_permission, _, _, _, _, _, _, _) = load_data();
     return cancel_contract_permission;
 }
 
 ;; Get change recipient permission
 int get_change_recipient_permission() method_id {
-    var (_, _, _, _, _, _, _, _, _, _, change_recipient_permission, _, _, _, _) = load_data();
+    var (_, _, _, _, _, _, _, _, _, _, change_recipient_permission, _, _, _, _, _, _) = load_data();
     return change_recipient_permission;
 }
 
 ;; Get auto claim flag
 int get_is_auto_claim() method_id {
-    var (_, _, _, _, _, _, _, _, is_auto_claim, _, _, _, _, _, _) = load_data();
+    var (_, _, _, _, _, _, _, _, is_auto_claim, _, _, _, _, _, _, _, _) = load_data();
     return is_auto_claim;
 }
 
 ;; Get logger address
 slice get_logger_address() method_id {
-    var (_, _, _, _, _, _, _, _, _, _, _, _, _, logger_address, _) = load_data();
+    var (_, _, _, _, _, _, _, _, _, _, _, _, _, logger_address, _, _, _) = load_data();
     return logger_address;
 }
 
 ;; Check if a specific address can cancel the contract
 int can_cancel_contract(slice address) method_id {
-    var (owner_address, recipient_address, _, _, _, _, _, _, _, cancel_contract_permission, _, _, _, _, _) = load_data();
+    var (owner_address, recipient_address, _, _, _, _, _, _, _, cancel_contract_permission, _, _, _, _, _, _, _) = load_data();
     return check_permission(address, owner_address, recipient_address, cancel_contract_permission);
 }
 
 ;; Check if a specific address can change the recipient
 int can_change_recipient(slice address) method_id {
-    var (owner_address, recipient_address, _, _, _, _, _, _, _, _, change_recipient_permission, _, _, _, _) = load_data();
+    var (owner_address, recipient_address, _, _, _, _, _, _, _, _, change_recipient_permission, _, _, _, _, _, _) = load_data();
     return check_permission(address, owner_address, recipient_address, change_recipient_permission);
 }
 
 ;; Get locked amount at a specific time
 int get_locked_amount(int at_time) method_id {
     var (_, _, _, vesting_total_amount, vesting_start_time, vesting_total_duration, 
-        unlock_period, cliff_duration, _, _, _, _, _, _, _) = load_data();
+        unlock_period, cliff_duration, _, _, _, _, _, _, _, _, _) = load_data();
   
     return calculate_locked_amount(vesting_total_amount, vesting_start_time, 
         vesting_total_duration, unlock_period, cliff_duration, at_time);
@@ -736,7 +762,7 @@ int get_locked_amount(int at_time) method_id {
 ;; Get unlocked amount at a specific time
 int get_unlocked_amount(int at_time) method_id {
     var (_, _, _, vesting_total_amount, vesting_start_time, vesting_total_duration, 
-        unlock_period, cliff_duration, _, _, _, _, _, _, _) = load_data();
+        unlock_period, cliff_duration, _, _, _, _, _, _, _, _, _) = load_data();
   
     return calculate_unlocked_amount(vesting_total_amount, vesting_start_time, 
         vesting_total_duration, unlock_period, cliff_duration, at_time);
@@ -754,14 +780,14 @@ int get_current_unlocked_amount() method_id {
 
 ;; Get claimed amount
 int get_claimed_amount() method_id {
-    var (_, _, _, _, _, _, _, _, _, _, _, claimed_amount, _, _, _) = load_data();
+    var (_, _, _, _, _, _, _, _, _, _, _, claimed_amount, _, _, _, _, _) = load_data();
     return claimed_amount;
 }
 
 ;; Get claimable amount
 int get_claimable_amount() method_id {
     var (_, _, _, vesting_total_amount, vesting_start_time, vesting_total_duration, 
-        unlock_period, cliff_duration, _, _, _, claimed_amount, _, _, _) = load_data();
+        unlock_period, cliff_duration, _, _, _, claimed_amount, _, _, _, _, _) = load_data();
     
     int unlocked_amount = calculate_unlocked_amount(vesting_total_amount, vesting_start_time, 
         vesting_total_duration, unlock_period, cliff_duration, now());
@@ -771,54 +797,77 @@ int get_claimable_amount() method_id {
 
 ;; Get vesting total amount directly
 int get_vesting_total_amount() method_id {
-    var (_, _, _, vesting_total_amount, _, _, _, _, _, _, _, _, _, _, _) = load_data();
+    var (_, _, _, vesting_total_amount, _, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
     return vesting_total_amount;
 }
 
 ;; Get seqno
 int get_seqno() method_id {
-    var (_, _, _, _, _, _, _, _, _, _, _, _, seqno, _, _) = load_data();
+    var (_, _, _, _, _, _, _, _, _, _, _, _, seqno, _, _, _, _) = load_data();
     return seqno;
 }
 
 ;; Get remaining amount (total - claimed)
 int get_remaining_amount() method_id {
-    var (_, _, _, vesting_total_amount, _, _, _, _, _, _, _, claimed_amount, _, _, _) = load_data();
+    var (_, _, _, vesting_total_amount, _, _, _, _, _, _, _, claimed_amount, _, _, _, _, _) = load_data();
     return vesting_total_amount - claimed_amount;
 }
 
 ;; Get vesting start time
 int get_vesting_start_time() method_id {
-    var (_, _, _, _, vesting_start_time, _, _, _, _, _, _, _, _, _, _) = load_data();
+    var (_, _, _, _, vesting_start_time, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
     return vesting_start_time;
 }
 
 ;; Get vesting total duration
 int get_vesting_total_duration() method_id {
-    var (_, _, _, _, _, vesting_total_duration, _, _, _, _, _, _, _, _, _) = load_data();
+    var (_, _, _, _, _, vesting_total_duration, _, _, _, _, _, _, _, _, _, _, _) = load_data();
     return vesting_total_duration;
 }
 
 ;; Get unlock period
 int get_unlock_period() method_id {
-    var (_, _, _, _, _, _, unlock_period, _, _, _, _, _, _, _, _) = load_data();
+    var (_, _, _, _, _, _, unlock_period, _, _, _, _, _, _, _, _, _, _) = load_data();
     return unlock_period;
 }
 
 ;; Get cliff duration
 int get_cliff_duration() method_id {
-    var (_, _, _, _, _, _, _, cliff_duration, _, _, _, _, _, _, _) = load_data();
+    var (_, _, _, _, _, _, _, cliff_duration, _, _, _, _, _, _, _, _, _) = load_data();
     return cliff_duration;
 }
 
 ;; Get vesting master address
 slice get_vesting_master_address() method_id {
-    var (_, _, _, _, _, _, _, _, _, _, _, _, _, _, vesting_master_address) = load_data();
+    var (_, _, _, _, _, _, _, _, _, _, _, _, _, _, vesting_master_address, _, _) = load_data();
     return vesting_master_address;
 }
 
 ;; Get jetton master address
 slice get_jetton_master_address() method_id {
-    var (_, _, jetton_master_address, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
+    var (_, _, jetton_master_address, _, _, _, _, _, _, _, _, _, _, _, _, _, _) = load_data();
     return jetton_master_address;
+}
+
+;; Get splits count
+int get_splits_count() method_id {
+    var (_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, splits_count, _) = load_data();
+    return splits_count;
+}
+
+;; Get max splits
+int get_max_splits() method_id {
+    var (_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, max_splits) = load_data();
+    return max_splits;
+}
+
+;; Check if more splits are allowed
+int can_split_more() method_id {
+    var (_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, splits_count, max_splits) = load_data();
+    return splits_count < max_splits;
+}
+
+;; Get minimum split amount
+int get_min_split_amount() method_id {
+    return 1000000000; ;; 1 TON
 }

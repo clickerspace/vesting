@@ -11,7 +11,7 @@ import {
 } from "@ton/core";
 
 export const VestingMasterOpcodes = {
-  create_vesting_wallet: 0x5fe9b8cd,
+  //create_vesting_wallet: 0x5fe9b8cd,
   update_wallet_code: 0x1234,
   change_owner: 0x2345,
   withdraw_tons: 0x3456,
@@ -69,6 +69,7 @@ export class VestingMaster implements Contract {
   }
 
   // Create vesting wallet
+  /*
   async sendCreateVestingWallet(
     provider: ContractProvider,
     via: Sender,
@@ -117,6 +118,7 @@ export class VestingMaster implements Contract {
       body: msgBody
     });
   }
+  */
 
   // Set logger address
   async sendSetLoggerAddress(

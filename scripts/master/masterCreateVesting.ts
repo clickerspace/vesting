@@ -1,3 +1,5 @@
+/* WE DON'T USE THIS SCRIPT ANYMORE. WE USE TRANSFER_NOTIFICATION INSTEAD */
+
 import { Address, toNano, fromNano } from "@ton/core";
 import { VestingMaster } from "../../wrappers/VestingMaster";
 import { NetworkProvider } from "@ton/blueprint";

@@ -18,7 +18,7 @@ slice pack_address(slice address) inline {
 
 ;; Common Operations
 const int op::transfer = 0xf8a7ea5;
-const int op::create_vesting_wallet = 0x5fe9b8cd;
+;; const int op::create_vesting_wallet = 0x5fe9b8cd;
 const int op::transfer_notification = 0x7362d09c;
 
 ;; Vesting Logger Operations
@@ -48,6 +48,7 @@ const int error::insufficient_fee = 0xffa2;
 const int error::insufficient_balance = 0xffa3;
 const int error::invalid_amount = 0xffa2;
 const int error::invalid_data = 0xffa4;
+const int error::max_splits_reached = 0xffa5;
 
 ;; Send Modes
 const int send_mode::regular = 0; ;; Pay fee separately

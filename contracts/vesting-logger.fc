@@ -1,7 +1,7 @@
 #include "imports/stdlib.fc";
 #include "imports/utils.fc";
 
-;; Define global variables for storage
+;; Global variables for storage
 global slice storage::owner;
 global cell storage::token_wallets;
 global cell storage::owner_wallets;
@@ -9,7 +9,7 @@ global cell storage::receiver_wallets;
 global cell storage::auto_claim_wallets;
 global int storage::init?;
 
-;; Load data into global variables
+;; Load data
 () load_data() impure inline {
     slice ds = get_data().begin_parse();
     
@@ -73,7 +73,7 @@ global int storage::init?;
         .end_cell());
 }
 
-;; Add wallet to a simple address index
+;; Add wallet to a address index
 cell add_to_index(cell index_dict, slice key_address, slice wallet_address) inline {
     ;; Parse addresses
     (int key_wc, int key_hash) = parse_std_addr(key_address);
@@ -143,13 +143,7 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
     
     ;; register_wallet (from vesting master contract)
     if (op == op::register_wallet) {
-        ;; If contract is not initialized, accept initial message and set sender as owner
-        if (~ storage::init?) {
-            storage::owner = sender_addr;
-            storage::init? = true;
-            save_data();
-        }
-        
+        ;; Owner must be set during contract deployment
         slice wallet_address = null();
         slice token_address = null();
         slice wallet_owner_address = null();
@@ -240,11 +234,6 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
         save_data();
         
         return ();
-    }
-    
-    if (~ storage::init?) {
-        storage::owner = sender_addr;
-        storage::init? = true;
     }
     
     if (op == op::set_logger_address) {
