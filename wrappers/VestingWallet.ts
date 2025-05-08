@@ -394,10 +394,7 @@ export class VestingWallet implements Contract {
     });
   }
 
-  async getMaxSplits(provider: ContractProvider) {
-    const result = await provider.get("get_max_splits", []);
-    return result.stack.readNumber();
-  }
+
 
   // updateOwner
   async updateOwner(
@@ -539,5 +536,26 @@ export class VestingWallet implements Contract {
   async getLoggerAddress(provider: ContractProvider) {
     const result = await provider.get("get_logger_address", []);
     return result.stack.readAddress();
+  }
+
+  async getSplitsCount(provider: ContractProvider) {
+    const result = await provider.get("get_splits_count", []);
+    return result.stack.readNumber();
+  }
+
+  async getMaxSplits(provider: ContractProvider) {
+    const result = await provider.get("get_max_splits", []);
+    return result.stack.readNumber();
+  }
+
+
+  async getCanSplitMore(provider: ContractProvider) {
+    const result = await provider.get("can_split_more", []);
+    return result.stack.readNumber() === -1;
+  }
+
+  async getMinSplitAmount(provider: ContractProvider) {
+    const result = await provider.get("get_min_split_amount", []);
+    return result.stack.readBigNumber();
   }
 }

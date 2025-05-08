@@ -1,7 +1,6 @@
 #include "imports/stdlib.fc";
 #include "imports/utils.fc";
 
-;; Global variables for storage
 global slice storage::owner;
 global cell storage::token_wallets;
 global cell storage::owner_wallets;
@@ -72,24 +71,20 @@ global int storage::init?;
         return ();
     }
     
-    storage::auto_claim_wallets = ds~load_dict();
+    ;; Load the combined cell with auto_claim_wallets and counts
+    cell counts_and_auto_claim = ds~load_ref();
+    slice auto_claim_counts = counts_and_auto_claim.begin_parse();
     
-    ;; Load wallet counts
-    if (ds.slice_refs() < 1) {
-        storage::total_wallet_count = 0;
-        storage::max_wallet_count = 2000;
-        return ();
-    }
-    
-    cell count_cell = ds~load_ref();
-    slice count_slice = count_cell.begin_parse();
-    storage::total_wallet_count = count_slice~load_uint(32);
-    storage::max_wallet_count = count_slice~load_uint(32);
+    storage::auto_claim_wallets = auto_claim_counts~load_dict();
+    storage::total_wallet_count = auto_claim_counts~load_uint(32);
+    storage::max_wallet_count = auto_claim_counts~load_uint(32);
 }
 
 ;; Save data from global variables
 () save_data() impure inline {
-    cell count_data = begin_cell()
+    ;; splited to fix 8:Overflow error
+    cell counts_and_auto_claim = begin_cell()
+        .store_dict(storage::auto_claim_wallets)
         .store_uint(storage::total_wallet_count, 32)
         .store_uint(storage::max_wallet_count, 32)
         .end_cell();
@@ -99,8 +94,7 @@ global int storage::init?;
         .store_dict(storage::token_wallets)
         .store_dict(storage::owner_wallets)
         .store_dict(storage::receiver_wallets)
-        .store_dict(storage::auto_claim_wallets)
-        .store_ref(count_data)
+        .store_ref(counts_and_auto_claim)
         .end_cell());
 }
 
