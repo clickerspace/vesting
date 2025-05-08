@@ -41,7 +41,7 @@ const API_KEY = 'b5982aadb3cf1211ff804df20704e55ec92439365b39858a4c3990794f08012
 
 const JETTON_MASTER_ADDRESS =
   "kQBQCVW3qnGKeBcumkLVD6x_K2nehE6xC5VsCyJZ02wvUBJy";
-  const MASTER_CONTRACT_ADDRESS = "EQDpmZ3Eao57wQzD7U7PeU9VQq-APUUNmohJ8XK5J-w_noFK";
+  const MASTER_CONTRACT_ADDRESS = "EQC-9C4SOX8S0KEon2ZTNzftQzSQj9WlezWZBiTearq0dj_e";
 
 const client = new TonClient({
   endpoint: "https://testnet.toncenter.com/api/v2/jsonRPC",
@@ -169,7 +169,7 @@ export async function run() {
     const unlockPeriod = 360; // 6 minutes
     const cliffDuration = 0;
 
-    const customStartDate = new Date("2025-04-16T10:55:00Z");
+    const customStartDate = new Date("2025-05-08T09:12:00Z");
     const dateTime = Math.floor(customStartDate.getTime() / 1000);
 
     const startTime = dateTime + startDelay;

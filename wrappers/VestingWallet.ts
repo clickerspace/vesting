@@ -33,7 +33,8 @@ export const VestingWalletOpcodes = {
   change_recipient: 0xaaaa,
   update_owner: 0xd3d3d3d3,
   relock: 0xbbbb,
-  split_vesting: 0x7890
+  split_vesting: 0x7890,
+  update_max_splits: 0x7891
 } as const;
 
 export type VestingWalletConfig = {
@@ -350,7 +351,7 @@ export class VestingWallet implements Contract {
       newDuration: number;
     }
   ) {
-    const queryId = 7n;
+    const queryId = 6n;
 
     return await provider.internal(via, {
       value: toNano("0.05"),
@@ -362,6 +363,7 @@ export class VestingWallet implements Contract {
         .endCell(),
     });
   }
+
 
   // splitVesting
   async sendSplitVesting(
@@ -375,7 +377,7 @@ export class VestingWallet implements Contract {
       jettonWalletAddress: Address;
     }
   ) {
-    const queryId = 8n;
+    const queryId = 7n;
 
     return await provider.internal(via, {
       value: toNano("0.2"),
@@ -392,6 +394,11 @@ export class VestingWallet implements Contract {
     });
   }
 
+  async getMaxSplits(provider: ContractProvider) {
+    const result = await provider.get("get_max_splits", []);
+    return result.stack.readNumber();
+  }
+
   // updateOwner
   async updateOwner(
     provider: ContractProvider,
@@ -400,7 +407,7 @@ export class VestingWallet implements Contract {
       newOwnerAddress: Address;
     }
   ) {
-    const queryId = 6n;
+    const queryId = 8n;
 
     return await provider.internal(via, {
       value: toNano("0.05"),
@@ -412,6 +419,27 @@ export class VestingWallet implements Contract {
         .endCell(),
     });
   }
+
+  async sendUpdateMaxSplits(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      newMaxSplits: number;
+    }
+  ) {
+    const queryId = 9n;
+
+    return await provider.internal(via, {
+      value: toNano("0.05"),
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell()
+        .storeUint(VestingWalletOpcodes.update_max_splits, 32)
+        .storeUint(queryId, 64)
+        .storeUint(opts.newMaxSplits, 32)
+        .endCell(),
+    });
+  }
+
 
   // Get owner address
   async getOwner(provider: ContractProvider) {

@@ -26,6 +26,7 @@ const int op::register_wallet = 0xd1d1d1d1;
 const int op::set_logger_address = 0x4567;
 const int op::update_recipient = 0xd2d2d2d2;
 const int op::update_owner = 0xd3d3d3d3;
+const int op::set_max_wallets = 0xd4d4d4d4;
 
 ;; Only Owner Operations
 const int op::update_vesting_wallet_code = 0x1234;
@@ -40,6 +41,8 @@ const int op::cancel_vesting = 0x9999;
 const int op::change_recipient = 0xaaaa;
 const int op::relock = 0xbbbb;
 const int op::split_vesting = 0x7890;
+const int op::update_max_splits = 0x7891;
+
 
 ;; Error Codes
 const int error::invalid_op = 0xffff;
@@ -49,6 +52,8 @@ const int error::insufficient_balance = 0xffa3;
 const int error::invalid_amount = 0xffa2;
 const int error::invalid_data = 0xffa4;
 const int error::max_splits_reached = 0xffa5;
+const int error::max_wallets_reached = 0xffa6;
+const int error::invalid_value = 0xffa7;
 
 ;; Send Modes
 const int send_mode::regular = 0; ;; Pay fee separately

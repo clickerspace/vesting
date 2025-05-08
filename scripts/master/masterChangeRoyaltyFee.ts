@@ -2,7 +2,7 @@ import { Address, fromNano } from '@ton/core';
 import { VestingMaster } from '../../wrappers/VestingMaster';
 import { NetworkProvider } from '@ton/blueprint';
 
-const MASTER_CONTRACT_ADDRESS = "EQBg4NOI59Mx_uOxqtm5CQ8-BdR6CVxJIqv3IW10oZ-qqPtR";
+const MASTER_CONTRACT_ADDRESS = "EQC-9C4SOX8S0KEon2ZTNzftQzSQj9WlezWZBiTearq0dj_e";
 const NEW_ROYALTY_FEE = 200000000; // 0.2 TON
 
 export async function run(provider: NetworkProvider) {

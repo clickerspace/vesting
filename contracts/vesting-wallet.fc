@@ -396,7 +396,7 @@ slice calculate_contract_address(cell state_init) inline {
         slice jetton_wallet_address = in_msg_body~load_msg_addr();
         
         int remaining_amount = vesting_total_amount - claimed_amount;
-        int min_split_amount = 1000000000; ;; 1 TON
+        int min_split_amount = 1000000000; ;; 1
         
         ;; Check if the split amount is valid and above minimum threshold
         throw_unless(error::invalid_amount, (split_amount >= min_split_amount) & (split_amount < remaining_amount));
@@ -425,7 +425,7 @@ slice calculate_contract_address(cell state_init) inline {
             0, ;; seqno starts at 0
             logger_address,
             my_address(), ;; current wallet as master for new vesting
-            0,  ;; splits
+            splits_count + 1,  ;; splits
             max_splits ;; max_splits
         );
         
@@ -617,6 +617,24 @@ slice calculate_contract_address(cell state_init) inline {
             is_auto_claim, cancel_contract_permission, change_recipient_permission,
             claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits);
         return ();
+    }
+
+    ;; Update max splits
+    if (op == op::update_max_splits) {
+        throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
+        
+        int new_max_splits = in_msg_body~load_uint(32);
+        throw_unless(error::invalid_amount, new_max_splits <= 15); ;; 15 is the maximum number of splits (random number)
+
+        max_splits = max(max_splits, new_max_splits);
+
+        save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount,
+            vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
+            is_auto_claim, cancel_contract_permission, change_recipient_permission,
+            claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits);
+        
+        return ();
+            
     }
 
     ;; Withdraw jettons

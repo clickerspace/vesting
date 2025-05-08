@@ -14,6 +14,8 @@ import {
 export const VestingLoggerOpcodes = {
   register_wallet: 0xd1d1d1d1,
   update_recipient: 0xd2d2d2d2,
+  update_owner: 0xd3d3d3d3,
+  set_max_wallets: 0xd4d4d4d4,
 } as const;
 
 export type VestingLoggerConfig = {
@@ -108,6 +110,26 @@ export class VestingLogger implements Contract {
         .endCell(),
     });
   }
+
+  async sendSetMaxWallets(
+    provider: ContractProvider,
+    via: Sender,
+    opts: {
+      maxWallets: number;
+    }
+  ) {
+    const queryId = 2n;
+    await provider.internal(via, {
+      value: toNano("0.05"),
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell()
+        .storeUint(VestingLoggerOpcodes.set_max_wallets, 32)
+        .storeUint(queryId, 64)
+        .storeUint(opts.maxWallets, 32)
+        .endCell(),
+    });
+  }
+  
 
   // Get all wallets for a token
   async getTokenWallets(provider: ContractProvider, tokenAddress: Address) {
@@ -252,4 +274,17 @@ export class VestingLogger implements Contract {
       throw error;
     }
   }
+
+  // Get total wallet count
+  async getTotalWalletCount(provider: ContractProvider) {
+    const result = await provider.get("get_total_wallet_count", []);
+    return result.stack.readNumber();
+  }
+
+  // Get max wallet count
+  async getMaxWalletCount(provider: ContractProvider) {
+    const result = await provider.get("get_max_wallet_count", []);
+    return result.stack.readNumber();
+  }
+  
 }

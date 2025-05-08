@@ -2,7 +2,7 @@ import { Address, fromNano } from '@ton/core';
 import { VestingWallet } from '../../wrappers/VestingWallet';
 import { NetworkProvider } from '@ton/blueprint';
 
-const VESTING_WALLET_CONTRACT_ADDRESS = "EQAvPePAY56rPqNxWb5UcJVBGEt8utakfclW_yuNukJRqui7";
+const VESTING_WALLET_CONTRACT_ADDRESS = "EQDAybZbwQcnUsiYjd2Y5uWH_UxcU5XbEPee0lEm2KyhCD6I";
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleString();
@@ -55,7 +55,8 @@ export async function run(provider: NetworkProvider) {
     const claimableAmount = await vestingWallet.getClaimableAmount();
     const seqno = await vestingWallet.getSeqno();
     const loggerAddress = await vestingWallet.getLoggerAddress();
-    
+    const maxSplits = await vestingWallet.getMaxSplits();
+
     console.log('\n===== VESTING WALLET INFORMATION =====');
     console.log('Wallet Address:', walletAddress.toString());
     console.log('Owner Address:', owner.toString());
@@ -88,6 +89,7 @@ export async function run(provider: NetworkProvider) {
     console.log('\n--- Vesting Logger and Master ---');
     console.log('Vesting Logger Address:', vestingData.loggerAddress.toString());
     console.log('Vesting Master Address:', vestingData.vestingMasterAddress.toString());
+    console.log('Max Splits:', maxSplits);
 
     const now = Math.floor(Date.now() / 1000);
     const progress = Math.min(

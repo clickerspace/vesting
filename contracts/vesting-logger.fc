@@ -7,6 +7,9 @@ global cell storage::token_wallets;
 global cell storage::owner_wallets;
 global cell storage::receiver_wallets;
 global cell storage::auto_claim_wallets;
+global int storage::total_wallet_count;
+global int storage::max_wallet_count;
+
 global int storage::init?;
 
 ;; Load data
@@ -20,6 +23,8 @@ global int storage::init?;
         storage::owner_wallets = new_dict();
         storage::receiver_wallets = new_dict();
         storage::auto_claim_wallets = new_dict();
+        storage::total_wallet_count = 0;
+        storage::max_wallet_count = 2000;
         storage::init? = false;
         return ();
     }
@@ -32,6 +37,8 @@ global int storage::init?;
         storage::owner_wallets = new_dict();
         storage::receiver_wallets = new_dict();
         storage::auto_claim_wallets = new_dict();
+        storage::total_wallet_count = 0;
+        storage::max_wallet_count = 2000;
         return ();
     }
     
@@ -41,6 +48,8 @@ global int storage::init?;
         storage::owner_wallets = new_dict();
         storage::receiver_wallets = new_dict();
         storage::auto_claim_wallets = new_dict();
+        storage::total_wallet_count = 0;
+        storage::max_wallet_count = 2000;
         return ();
     }
     
@@ -49,6 +58,8 @@ global int storage::init?;
     if (ds.slice_refs() < 1) {
         storage::receiver_wallets = new_dict();
         storage::auto_claim_wallets = new_dict();
+        storage::total_wallet_count = 0;
+        storage::max_wallet_count = 2000;
         return ();
     }
     
@@ -56,20 +67,40 @@ global int storage::init?;
     
     if (ds.slice_refs() < 1) {
         storage::auto_claim_wallets = new_dict();
+        storage::total_wallet_count = 0;
+        storage::max_wallet_count = 2000;
         return ();
     }
     
     storage::auto_claim_wallets = ds~load_dict();
+    
+    ;; Load wallet counts
+    if (ds.slice_refs() < 1) {
+        storage::total_wallet_count = 0;
+        storage::max_wallet_count = 2000;
+        return ();
+    }
+    
+    cell count_cell = ds~load_ref();
+    slice count_slice = count_cell.begin_parse();
+    storage::total_wallet_count = count_slice~load_uint(32);
+    storage::max_wallet_count = count_slice~load_uint(32);
 }
 
 ;; Save data from global variables
 () save_data() impure inline {
+    cell count_data = begin_cell()
+        .store_uint(storage::total_wallet_count, 32)
+        .store_uint(storage::max_wallet_count, 32)
+        .end_cell();
+    
     set_data(begin_cell()
         .store_slice(storage::owner)
         .store_dict(storage::token_wallets)
         .store_dict(storage::owner_wallets)
         .store_dict(storage::receiver_wallets)
         .store_dict(storage::auto_claim_wallets)
+        .store_ref(count_data)
         .end_cell());
 }
 
@@ -167,6 +198,9 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
         throw_unless(error::invalid_data, ~ null?(token_address));
         throw_unless(error::invalid_data, ~ null?(wallet_owner_address));
         throw_unless(error::invalid_data, ~ null?(receiver_address));
+
+        ;; Check if max wallets are reached
+        throw_unless(error::max_wallets_reached, storage::total_wallet_count < storage::max_wallet_count);
         
         ;; Update token -> wallets mapping
         storage::token_wallets = add_to_index(storage::token_wallets, token_address, wallet_address);
@@ -183,6 +217,8 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
             builder wallet_builder = begin_cell().store_slice(wallet_address);
             storage::auto_claim_wallets~udict_set_ref(256, wallet_hash, wallet_builder.end_cell());
         }
+
+        storage::total_wallet_count += 1;
         
         save_data();
         return ();
@@ -242,6 +278,17 @@ cell remove_from_index(cell index_dict, slice key_address, slice wallet_address)
             storage::owner = new_owner;
             save_data();
         }
+        return ();
+    }
+
+    if (op == op::set_max_wallets) {
+        throw_unless(error::access_denied, equal_slices(sender_addr, storage::owner));
+    
+        int new_max_wallets = in_msg_body~load_uint(32);
+        throw_unless(error::invalid_value, new_max_wallets >= storage::total_wallet_count);
+    
+        storage::max_wallet_count = new_max_wallets;
+        save_data();
         return ();
     }
     
@@ -320,4 +367,16 @@ cell get_auto_claim_wallets() method_id {
 slice get_owner() method_id {
     load_data();
     return storage::owner;
+}
+
+;; Get total wallet count
+int get_total_wallet_count() method_id {
+    load_data();
+    return storage::total_wallet_count;
+}
+
+;; Get max wallet count
+int get_max_wallet_count() method_id {
+    load_data();
+    return storage::max_wallet_count;
 }
