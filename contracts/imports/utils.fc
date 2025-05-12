@@ -98,8 +98,10 @@ const int permission::neither = 4;
 const int ADDRESS_SIZE = 267; ;; 256 + 8 (workchain)
 
 ;; Vesting Constants
+const int logger::default_max_wallets = 2000; ;; Default maximum number of wallets
 const int vesting::min_period = 60; ;; Minimum vesting period in seconds (1 minute)
 const int vesting::max_period = 4294967295; ;; Maximum vesting period in seconds (~136 years)
 const int vesting::min_amount = 1000000000; ;; Minimum vesting amount (1 JETTON in nanotons)
-const int vesting::max_split_amount = 5; ;; Maximum number of splits
+const int vesting::default_max_split_amount = 5; ;; Default maximum number of splits
+const int vesting::max_split_amount = 15; ;; Absolute maximum number of splits
 const int vesting::min_split_amount = 1000000000; ;; Minimum split amount (1 JETTON in nanotons)

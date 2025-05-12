@@ -34,7 +34,7 @@ global int storage::init?;
         storage::receiver_wallets = new_dict();
         storage::auto_claim_wallets = new_dict();
         storage::total_wallet_count = 0;
-        storage::max_wallet_count = 2000; ;; default max wallets
+        storage::max_wallet_count = logger::default_max_wallets;
         storage::init? = false;
         return ();
     }
@@ -48,7 +48,7 @@ global int storage::init?;
         storage::receiver_wallets = new_dict();
         storage::auto_claim_wallets = new_dict();
         storage::total_wallet_count = 0;
-        storage::max_wallet_count = 2000;
+        storage::max_wallet_count = logger::default_max_wallets;
         return ();
     }
     
@@ -59,7 +59,7 @@ global int storage::init?;
         storage::receiver_wallets = new_dict();
         storage::auto_claim_wallets = new_dict();
         storage::total_wallet_count = 0;
-        storage::max_wallet_count = 2000;
+        storage::max_wallet_count = logger::default_max_wallets;
         return ();
     }
     
@@ -69,7 +69,7 @@ global int storage::init?;
         storage::receiver_wallets = new_dict();
         storage::auto_claim_wallets = new_dict();
         storage::total_wallet_count = 0;
-        storage::max_wallet_count = 2000;
+        storage::max_wallet_count = logger::default_max_wallets;
         return ();
     }
     
@@ -78,7 +78,7 @@ global int storage::init?;
     if (ds.slice_refs() < 1) {
         storage::auto_claim_wallets = new_dict();
         storage::total_wallet_count = 0;
-        storage::max_wallet_count = 2000;
+        storage::max_wallet_count = logger::default_max_wallets;
         return ();
     }
     

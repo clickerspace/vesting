@@ -142,16 +142,20 @@ int check_permission(slice sender_addr, slice owner_address, slice recipient_add
 ;; Calculate unlocked amount at a specific time
 int calculate_unlocked_amount(int vesting_total_amount, int vesting_start_time, int vesting_total_duration, 
     int unlock_period, int cliff_duration, int at_time) inline {
+    ;; If the current time is before the vesting start time, return 0
     if (at_time < vesting_start_time) {
         return 0;
     }
   
+    ;; Calculate the time passed since the vesting start time
     int time_passed = at_time - vesting_start_time;
   
+    ;; If the time passed is less than the cliff duration, return 0
     if (time_passed < cliff_duration) {
         return 0;
     }
   
+    ;; Calculate the number of unlock intervals
     int unlock_intervals = vesting_total_duration / unlock_period;
     
     ;; If the total vesting duration has passed, return the full amount
@@ -159,12 +163,17 @@ int calculate_unlocked_amount(int vesting_total_amount, int vesting_start_time, 
         return vesting_total_amount;
     }
     
+    ;; Calculate the number of intervals passed since the cliff duration
     int intervals_passed = (time_passed - cliff_duration) / unlock_period;
     
-    ;; Last period check (last period gets all remaining tokens)
+    ;; If the number of intervals passed is equal to the number of unlock intervals minus 1,
+    ;; return the sum of the base amount per interval multiplied by the number of intervals minus 1,
+    ;; plus the remaining amount
     if (intervals_passed == unlock_intervals - 1) {
         ;; Standard calculation except for the last period
+        ;; Calculate the base amount per interval
         int base_per_interval = vesting_total_amount / unlock_intervals;
+        ;; Calculate the sum of the base amount per interval multiplied by the number of intervals minus 1
         int previous_periods_amount = base_per_interval * (unlock_intervals - 1);
         
         ;; Last period: Subtract the sum of previous periods from the total amount = remaining tokens
@@ -172,7 +181,9 @@ int calculate_unlocked_amount(int vesting_total_amount, int vesting_start_time, 
     }
     
     ;; Standard calculation for normal periods
+    ;; Calculate the amount per interval
     int amount_per_interval = vesting_total_amount / unlock_intervals;
+    ;; Calculate the unlocked amount
     int unlocked_amount = intervals_passed * amount_per_interval;
     
     return unlocked_amount;
@@ -183,6 +194,7 @@ int calculate_locked_amount(int vesting_total_amount, int vesting_start_time, in
     int unlock_period, int cliff_duration, int at_time) inline {
     int unlocked = calculate_unlocked_amount(vesting_total_amount, vesting_start_time, 
         vesting_total_duration, unlock_period, cliff_duration, at_time);
+    ;; Calculate the locked amount
     return vesting_total_amount - unlocked;
 }
 
@@ -649,7 +661,7 @@ slice calculate_contract_address(cell state_init) inline {
         throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
         
         int new_max_splits = in_msg_body~load_uint(32);
-        throw_unless(error::invalid_amount, new_max_splits <= 15); ;; 15 is the maximum number of splits (random number)
+        throw_unless(error::invalid_amount, new_max_splits <= vesting::max_split_amount);
 
         max_splits = max(max_splits, new_max_splits);
 

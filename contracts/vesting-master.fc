@@ -7,6 +7,15 @@
   extra_data_cell#_ vesting_wallet_code:^Cell logger_address:MsgAddressInt total_wallets_created:uint64 total_royalty_collected:Coins royalty_fee:Coins = ExtraData;
 -}
 
+{-
+  VestingTimeParameters - Stores vesting timing parameters in a single 128-bit value.
+  Format:
+  - Bit 96-127: vesting_start_time (32 bit Unix timestamp)
+  - Bit 64-95:  vesting_total_duration (32 bit seconds)
+  - Bit 32-63:  unlock_period (32 bit seconds)
+  - Bit 0-31:   cliff_duration (32 bit seconds)
+-}
+
 ;; Load data from storage
 (slice, cell, slice, int, int, int) load_data() inline {
     var ds = get_data().begin_parse();
@@ -91,7 +100,7 @@ cell create_vesting_wallet_state_init(slice owner_address, slice recipient_addre
         .store_slice(logger_address) ;; logger address (256 bits)
         .store_slice(my_address) ;; my address (256 bits)
         .store_uint(0, 8) ;; splits_count (8 bits)
-        .store_uint(vesting::max_split_amount, 8) ;; max_splits (8 bits)
+        .store_uint(vesting::default_max_split_amount, 8) ;; max_splits (8 bits)
         .end_cell();
     
     ;; A cell can store up to 4 references
