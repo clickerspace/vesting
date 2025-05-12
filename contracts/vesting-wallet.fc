@@ -1,17 +1,20 @@
 #include "imports/stdlib.fc";
 #include "imports/utils.fc";
 
-;; Unpack vesting parameters from packed format
-(int, int, int, int) unpack_vesting_params(int packed_params) inline {
-    int vesting_start_time = (packed_params >> 96) & 0xFFFFFFFF;
-    int vesting_total_duration = (packed_params >> 64) & 0xFFFFFFFF;
-    int unlock_period = (packed_params >> 32) & 0xFFFFFFFF;
-    int cliff_duration = packed_params & 0xFFFFFFFF;
-    return (vesting_start_time, vesting_total_duration, unlock_period, cliff_duration);
-}
+{-
+  Storage
+  storage#_ owner_address:MsgAddressInt recipient_address:MsgAddressInt jetton_master_address:MsgAddressInt 
+             vesting_total_amount:Coins vesting_params:uint128 is_auto_claim:Bool cancel_permission:uint3
+             change_recipient_permission:uint3 claimed_amount:Coins seqno:uint32 logger_address:MsgAddressInt
+             vesting_master_address:MsgAddressInt splits_count:uint8 max_splits:uint8 = Storage;
+  
+  vesting_params#_ vesting_start_time:uint32 vesting_total_duration:uint32 unlock_period:uint32 
+                   cliff_duration:uint32 = VestingParams;
+-}
 
 (slice, slice, slice, int, int, int, int, int, int, int, int, int, int, slice, slice, int, int) load_data() inline {
     var ds = get_data().begin_parse();
+    ;; if ds is empty, return default values
     if (ds.slice_empty?()) {
         return (null(), null(), null(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null(), null(), 0, 5);
     }
@@ -78,32 +81,37 @@
     (unlock_period << 32) | 
                        cliff_duration;
 
+    ;; Create cell1 (256 bits)
     cell cell1 = begin_cell()
-        .store_slice(owner_address)
+        .store_slice(owner_address) ;; owner address (256 bits)
         .end_cell();
     
+    ;; Create cell2 (256 + 256 = 512 bits)
     cell cell2 = begin_cell()
-        .store_slice(recipient_address)
-        .store_slice(jetton_master_address)
+        .store_slice(recipient_address) ;; recipient address (256 bits)
+        .store_slice(jetton_master_address) ;; jetton master address (256 bits)
         .end_cell();
     
+    ;; Create cell3 (128 + 1 + 3 + 3 = 135 bits)
     cell cell3 = begin_cell()
-        .store_coins(vesting_total_amount)
-        .store_uint(packed_params, 128)
-        .store_uint(is_auto_claim, 1)
-        .store_uint(cancel_contract_permission, 3)
-        .store_uint(change_recipient_permission, 3)
+        .store_coins(vesting_total_amount) ;; vesting total amount (128 bits)
+        .store_uint(packed_params, 128) ;; packed params (128 bits)
+        .store_uint(is_auto_claim, 1) ;; is auto claim (1 bit)
+        .store_uint(cancel_contract_permission, 3) ;; cancel contract permission (3 bits)
+        .store_uint(change_recipient_permission, 3) ;; change recipient permission (3 bits)
         .end_cell();
-    
+
+    ;; Create cell4 (128 + 32 + 256 + 256 + 8 + 8 = 736 bits)   
     cell cell4 = begin_cell()
-        .store_coins(claimed_amount)
-        .store_uint(seqno, 32)
-        .store_slice(logger_address)
-        .store_slice(vesting_master_address)
-        .store_uint(splits_count, 8)
-        .store_uint(max_splits, 8)
+        .store_coins(claimed_amount) ;; claimed amount (128 bits)
+        .store_uint(seqno, 32) ;; seqno (32 bits)
+        .store_slice(logger_address) ;; logger address (256 bits)
+        .store_slice(vesting_master_address) ;; vesting master address (256 bits)
+        .store_uint(splits_count, 8) ;; splits count (8 bits)
+        .store_uint(max_splits, 8) ;; max splits (8 bits)
         .end_cell();
     
+    ;; Save data cell (up to 4 references)
     set_data(
         begin_cell()
         .store_ref(cell1)
@@ -114,13 +122,17 @@
     );
 }
 
+;; Check permission for sender address
 int check_permission(slice sender_addr, slice owner_address, slice recipient_address, int permission_type) inline {
+    ;; only owner
     if (permission_type == permission::only_owner) {
         return equal_slices(sender_addr, owner_address);
     } 
+    ;; only recipient
     if (permission_type == permission::only_recipient) {
         return equal_slices(sender_addr, recipient_address);
     }
+    ;; both
     if (permission_type == permission::both) {
         return equal_slices(sender_addr, owner_address) | equal_slices(sender_addr, recipient_address);
     }
@@ -177,7 +189,7 @@ int calculate_locked_amount(int vesting_total_amount, int vesting_start_time, in
 ;; Send logger message
 () send_logger_message(slice logger_address, int op, int query_id, slice data_slice1, slice data_slice2) impure inline {
     var log_msg = begin_cell()
-        .store_uint(0x18, 6)
+        .store_uint(BOUNCEABLE, 6)
         .store_slice(logger_address)
         .store_coins(gas::logger_message)
         .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
@@ -272,25 +284,35 @@ slice calculate_contract_address(cell state_init) inline {
         is_auto_claim, cancel_contract_permission, change_recipient_permission, 
         claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits) = load_data();
     
-    throw_unless(33, msg_seqno == seqno);
-    throw_if(34, valid_until <= now());
+    ;; Check if the message sequence number is valid
+    throw_unless(error::invalid_seqno, msg_seqno == seqno);
+    
+    ;; Check if the message is valid until the current time
+    throw_if(error::invalid_valid_until, valid_until <= now());
     
     accept_message();
     
+    ;; Check if the operation is valid
     int op = in_msg~load_uint(32);
     throw_unless(error::invalid_op, op == op::claim_unlocked);
     
+    ;; Get query ID
     int query_id = in_msg~load_uint(64);
+    
+    ;; Get forward TON amount
     int forward_ton_amount = in_msg~load_coins();
     slice jetton_wallet_address = in_msg~load_msg_addr();
 
+    ;; Calculate unlocked amount
     int unlocked_amount = calculate_unlocked_amount(vesting_total_amount, vesting_start_time, 
         vesting_total_duration, unlock_period, cliff_duration, now());
 
+    ;; Calculate claimable amount
     int claimable_amount = unlocked_amount - claimed_amount;
 
     throw_unless(error::invalid_amount, claimable_amount > 0);
 
+    ;; Create transfer message body
     var msg_body = begin_cell()
         .store_uint(op::transfer, 32)
         .store_uint(query_id, 64)
@@ -302,8 +324,9 @@ slice calculate_contract_address(cell state_init) inline {
         .store_uint(0, 1)
         .end_cell();
 
+    ;; Create transfer message
     var msg = begin_cell()
-        .store_uint(0x18, 6)
+        .store_uint(BOUNCEABLE, 6)
         .store_slice(jetton_wallet_address)
         .store_coins(forward_ton_amount + gas::jetton_transfer_wallet)
         .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
@@ -369,6 +392,7 @@ slice calculate_contract_address(cell state_init) inline {
 
     ;; Relock (extend vesting duration)
     if (op == op::relock) {
+        ;; Check permission - only owner can relock
         throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
         
         int new_duration = in_msg_body~load_uint(32);
@@ -396,10 +420,9 @@ slice calculate_contract_address(cell state_init) inline {
         slice jetton_wallet_address = in_msg_body~load_msg_addr();
         
         int remaining_amount = vesting_total_amount - claimed_amount;
-        int min_split_amount = 1000000000; ;; 1
         
         ;; Check if the split amount is valid and above minimum threshold
-        throw_unless(error::invalid_amount, (split_amount >= min_split_amount) & (split_amount < remaining_amount));
+        throw_unless(error::invalid_amount, (split_amount >= vesting::min_split_amount) & (split_amount < remaining_amount));
         
         ;; Check if maximum splits limit has been reached
         throw_unless(error::max_splits_reached, splits_count < max_splits);
@@ -434,9 +457,9 @@ slice calculate_contract_address(cell state_init) inline {
         
         ;; First deploy the new vesting wallet contract
         var deploy_msg = begin_cell()
-            .store_uint(0x18, 6)
+            .store_uint(BOUNCEABLE, 6)
             .store_slice(new_contract_address)
-            .store_coins(50000000)  ;; 0.05 TON for initial balance
+            .store_coins(gas::deploy_vesting_wallet)
             .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
             .store_ref(state_init)
             .store_ref(begin_cell().end_cell());
@@ -456,7 +479,7 @@ slice calculate_contract_address(cell state_init) inline {
             .end_cell();
             
         var msg = begin_cell()
-            .store_uint(0x18, 6)
+            .store_uint(BOUNCEABLE, 6)
             .store_slice(jetton_wallet_address)
             .store_coins(forward_ton_amount + gas::jetton_transfer_wallet)
             .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
@@ -467,9 +490,9 @@ slice calculate_contract_address(cell state_init) inline {
         ;; Logger for the new vesting wallet
         if ((~ null?(logger_address)) & (logger_address.preload_uint(2) != 0)) {
             var log_msg = begin_cell()
-            .store_uint(0x18, 6)
+            .store_uint(BOUNCEABLE, 6)
             .store_slice(logger_address)
-            .store_coins(10000000)
+            .store_coins(gas::logger_message)
             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_uint(op::register_wallet, 32)
             .store_uint(query_id, 64);
@@ -504,6 +527,7 @@ slice calculate_contract_address(cell state_init) inline {
 
     ;; Cancel vesting operation
     if (op == op::cancel_vesting) {
+        ;; Check permission - only owner or recipient or both can cancel
         throw_unless(error::access_denied, check_permission(sender_addr, owner_address, recipient_address, cancel_contract_permission));
         
         int forward_ton_amount = in_msg_body~load_coins();
@@ -525,9 +549,9 @@ slice calculate_contract_address(cell state_init) inline {
                 .end_cell();
                 
             var msg = begin_cell()
-                .store_uint(0x18, 6)
+                .store_uint(BOUNCEABLE, 6)
                 .store_slice(jetton_wallet_address)
-                .store_coins(forward_ton_amount + gas::jetton_transfer_wallet) ;; gas
+                .store_coins(forward_ton_amount + gas::jetton_transfer_wallet)
                 .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                 .store_ref(msg_body);
             
@@ -545,6 +569,7 @@ slice calculate_contract_address(cell state_init) inline {
 
     ;; Change recipient
     if (op == op::change_recipient) {
+        ;; Check permission - only owner or recipient or both can change recipient
         throw_unless(error::access_denied, 
             check_permission(sender_addr, owner_address, recipient_address, change_recipient_permission));
         
@@ -602,7 +627,7 @@ slice calculate_contract_address(cell state_init) inline {
             .end_cell();
             
         var msg = begin_cell()
-            .store_uint(0x18, 6)
+            .store_uint(BOUNCEABLE, 6)
             .store_slice(jetton_wallet_address)
             .store_coins(forward_ton_amount + gas::jetton_transfer_wallet)
             .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
@@ -660,7 +685,7 @@ slice calculate_contract_address(cell state_init) inline {
             .end_cell();
             
         var msg = begin_cell()
-            .store_uint(0x18, 6)
+            .store_uint(BOUNCEABLE, 6)
             .store_slice(jetton_wallet_address)
             .store_coins(forward_ton_amount + gas::jetton_transfer_wallet)
             .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
@@ -887,5 +912,5 @@ int can_split_more() method_id {
 
 ;; Get minimum split amount
 int get_min_split_amount() method_id {
-    return 1000000000; ;; 1 TON
+    return vesting::min_split_amount;
 }
