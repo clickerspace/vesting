@@ -677,7 +677,7 @@ slice calculate_contract_address(cell state_init) inline {
     ;; Withdraw jettons
     if (op == op::withdraw_jettons) {
         throw_unless(error::access_denied, equal_slices(sender_addr, owner_address));
-    
+
         slice to_addr = in_msg_body~load_msg_addr();
         int jetton_amount = in_msg_body~load_coins();
         int forward_ton_amount = in_msg_body~load_coins();
@@ -685,32 +685,38 @@ slice calculate_contract_address(cell state_init) inline {
 
         throw_unless(error::access_denied, equal_slices(to_addr, owner_address));
     
+        ;; Calculate the actual remaining amount
+        int remaining_amount = vesting_total_amount - claimed_amount;
+    
+        ;; Only proceed if there are tokens to withdraw
+        throw_unless(error::invalid_amount, remaining_amount > 0);
+    
         var msg_body = begin_cell()
-            .store_uint(op::transfer, 32)
-            .store_uint(query_id, 64)
-            .store_coins(jetton_amount)
-            .store_slice(to_addr)
-            .store_slice(sender_addr)
-            .store_uint(0, 1)
-            .store_coins(forward_ton_amount)
-            .store_uint(0, 1)
-            .end_cell();
-            
-        var msg = begin_cell()
-            .store_uint(BOUNCEABLE, 6)
-            .store_slice(jetton_wallet_address)
-            .store_coins(forward_ton_amount + gas::jetton_transfer_wallet)
-            .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-            .store_ref(msg_body);
+        .store_uint(op::transfer, 32)
+        .store_uint(query_id, 64)
+        .store_coins(remaining_amount)
+        .store_slice(to_addr)
+        .store_slice(sender_addr)
+        .store_uint(0, 1)
+        .store_coins(forward_ton_amount)
+        .store_uint(0, 1)
+        .end_cell();
         
+        var msg = begin_cell()
+        .store_uint(BOUNCEABLE, 6)
+        .store_slice(jetton_wallet_address)
+        .store_coins(forward_ton_amount + gas::jetton_transfer_wallet)
+        .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .store_ref(msg_body);
+    
         send_raw_message(msg.end_cell(), send_mode::pay_gas_separately);
 
         claimed_amount = vesting_total_amount;
-        
+    
         save_data(owner_address, recipient_address, jetton_master_address, vesting_total_amount, 
             vesting_start_time, vesting_total_duration, unlock_period, cliff_duration,
             is_auto_claim, cancel_contract_permission, change_recipient_permission,
-            claimed_amount, seqno, logger_address,vesting_master_address, splits_count, max_splits);
+            claimed_amount, seqno, logger_address, vesting_master_address, splits_count, max_splits);
 
         return ();
     }
