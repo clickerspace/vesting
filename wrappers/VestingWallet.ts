@@ -52,6 +52,9 @@ export type VestingWalletConfig = {
   claimed_amount: bigint;
   seqno: number;
   logger_address: Address;
+  vesting_master_address: Address;
+  splits_count: number;
+  max_splits: number;
 };
 
 export function packVestingParams(
@@ -77,8 +80,6 @@ export function vestingWalletConfigToCell(config: VestingWalletConfig): Cell {
     config.cliff_duration
   );
 
-  // Yeni hücre yapısı: 4 ayrı referans hücresinde veri
-  
   // Cell 1 - owner address
   const cell1 = beginCell()
     .storeAddress(config.owner_address)
@@ -99,11 +100,14 @@ export function vestingWalletConfigToCell(config: VestingWalletConfig): Cell {
     .storeUint(config.change_recipient_permission, 3)
     .endCell();
   
-  // Cell 4 - claimed amount and seqno
+  // Cell 4 - claimed amount, seqno, logger, vesting_master, splits info
   const cell4 = beginCell()
     .storeCoins(config.claimed_amount)
     .storeUint(config.seqno, 32)
     .storeAddress(config.logger_address)
+    .storeAddress(config.vesting_master_address) // Bu da eksikti!
+    .storeUint(config.splits_count, 8)
+    .storeUint(config.max_splits, 8)
     .endCell();
   
   // Ana hücre, dört referansı içeriyor
@@ -135,10 +139,17 @@ export class VestingWallet implements Contract {
     return new VestingWallet(contractAddress(workchain, init), init);
   }
 
-  // Create with default parameters
+  async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {
+    await provider.internal(via, {
+      value,
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell().endCell(),
+    });
+  }
+
   static createWithDefaults(
     ownerAddress: Address,
-    recipientAddress: Address, // Recipient address eklendi
+    recipientAddress: Address,
     code: Cell,
     options: {
       jettonMasterAddress?: Address | string;
@@ -150,6 +161,7 @@ export class VestingWallet implements Contract {
       isAutoClaim?: number;
       cancelContractPermission?: number;
       changeRecipientPermission?: number;
+      vestingMasterAddress?: Address;
     } = {}
   ) {
     // Use current time + delay for start time if not provided
@@ -171,6 +183,7 @@ export class VestingWallet implements Contract {
     const isAutoClaim = options.isAutoClaim !== undefined ? options.isAutoClaim : 0;
     const cancelContractPermission = options.cancelContractPermission || 2; // Default: only_owner
     const changeRecipientPermission = options.changeRecipientPermission || 2; // Default: only_owner
+    const vestingMasterAddress = options.vestingMasterAddress || Address.parse("EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"); // null address
 
     const config: VestingWalletConfig = {
       owner_address: ownerAddress,
@@ -189,18 +202,13 @@ export class VestingWallet implements Contract {
       change_recipient_permission: changeRecipientPermission,
       claimed_amount: 0n,
       seqno: 0,
-      logger_address: Address.parse(LOGGER_CONTRACT_ADDRESS)
+      logger_address: Address.parse(LOGGER_CONTRACT_ADDRESS),
+      vesting_master_address: vestingMasterAddress,
+      splits_count: 0,
+      max_splits: 5,
     };
 
     return VestingWallet.createFromConfig(config, code);
-  }
-
-  async sendDeploy(provider: ContractProvider, via: Sender, value: bigint) {
-    await provider.internal(via, {
-      value,
-      sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: beginCell().endCell(),
-    });
   }
 
   async sendJettons(
@@ -230,7 +238,7 @@ export class VestingWallet implements Contract {
   }
 
   // claimUnlocked
-  async claimUnlocked(
+  async sendClaimUnlocked(
     provider: ContractProvider,
     via: Sender,
     opts: {
@@ -277,7 +285,7 @@ export class VestingWallet implements Contract {
   }
 
   // cancelVesting
-  async cancelVesting(
+  async sendCancelVesting(
     provider: ContractProvider, 
     via: Sender,
     opts: {
@@ -300,7 +308,7 @@ export class VestingWallet implements Contract {
   }
 
   // changeRecipient
-  async changeRecipient(
+  async sendChangeRecipient(
     provider: ContractProvider, 
     via: Sender,
     opts: {
@@ -310,7 +318,7 @@ export class VestingWallet implements Contract {
     const queryId = 5n;
 
     return await provider.internal(via, {
-      value: toNano("0.05"),
+      value: toNano("0.2"),
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell()
         .storeUint(VestingWalletOpcodes.change_recipient, 32)
@@ -323,7 +331,7 @@ export class VestingWallet implements Contract {
   // Get vesting data
   async getVestingData(provider: ContractProvider) {
     const result = await provider.get("get_vesting_data", []);
-
+  
     return {
       ownerAddress: result.stack.readAddress(),
       recipientAddress: result.stack.readAddress(),
@@ -339,7 +347,9 @@ export class VestingWallet implements Contract {
       claimedAmount: result.stack.readBigNumber(),
       seqno: result.stack.readNumber(),
       loggerAddress: result.stack.readAddress(),
-      vestingMasterAddress: result.stack.readAddress(),
+      vestingMasterAddress: result.stack.readAddress(), // Bu eksikti!
+      splitsCount: result.stack.readNumber(),
+      maxSplits: result.stack.readNumber(),
     };
   }
 
@@ -380,7 +390,7 @@ export class VestingWallet implements Contract {
     const queryId = 7n;
 
     return await provider.internal(via, {
-      value: toNano("0.2"),
+      value: toNano("1"),
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell()
         .storeUint(VestingWalletOpcodes.split_vesting, 32)
@@ -394,10 +404,8 @@ export class VestingWallet implements Contract {
     });
   }
 
-
-
   // updateOwner
-  async updateOwner(
+  async sendUpdateOwner(
     provider: ContractProvider,
     via: Sender,
     opts: {
@@ -407,7 +415,7 @@ export class VestingWallet implements Contract {
     const queryId = 8n;
 
     return await provider.internal(via, {
-      value: toNano("0.05"),
+      value: toNano("0.2"),
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell()
         .storeUint(VestingWalletOpcodes.update_owner, 32)
@@ -436,7 +444,6 @@ export class VestingWallet implements Contract {
         .endCell(),
     });
   }
-
 
   // Get owner address
   async getOwner(provider: ContractProvider) {
@@ -468,7 +475,7 @@ export class VestingWallet implements Contract {
   }
 
   // take address parameter
-  async canCancelContract(provider: ContractProvider, address: Address) {
+  async getCanCancelContract(provider: ContractProvider, address: Address) {
     const result = await provider.get("can_cancel_contract", [
       { type: "slice", cell: beginCell().storeAddress(address).endCell() },
     ]);
@@ -476,7 +483,7 @@ export class VestingWallet implements Contract {
   }
 
   // take address parameter
-  async canChangeRecipient(provider: ContractProvider, address: Address) {
+  async getCanChangeRecipient(provider: ContractProvider, address: Address) {
     const result = await provider.get("can_change_recipient", [
       { type: "slice", cell: beginCell().storeAddress(address).endCell() },
     ]);

@@ -11,8 +11,7 @@ export async function run(provider: NetworkProvider) {
     
     let newRecipientAddress = Address.parse("UQBsQBAHy5FOWkOHrLDGDwlpEOhDerGg73Hb0RNTiJDpmiBM");
     
-    await vestingWallet.changeRecipient(
-      provider.provider(walletAddress),
+    await vestingWallet.sendChangeRecipient(
       provider.sender(),
       {
         newRecipientAddress: newRecipientAddress

@@ -12,8 +12,7 @@ export async function run(provider: NetworkProvider) {
     let jettonWalletAddress = Address.parse("EQBdrXrlWC9d8OmySn41pi17kp0QoWTMJQl6YcT1DDuqDyZj");
     
     const forwardTonAmount = toNano('0.1');
-    await vestingWallet.cancelVesting(
-      provider.provider(walletAddress),
+    await vestingWallet.sendCancelVesting(
       provider.sender(),
       {
         forwardTonAmount,

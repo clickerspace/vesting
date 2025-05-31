@@ -24,8 +24,7 @@ export async function run(provider: NetworkProvider) {
     let jettonWalletAddress = Address.parse(WALLET_JETTON_ADDRESS);
     
     const forwardTonAmount = toNano('0.3');
-    await vestingWallet.claimUnlocked(
-      provider.provider(walletAddress),
+    await vestingWallet.sendClaimUnlocked(
       provider.sender(),
       {
         forwardTonAmount,

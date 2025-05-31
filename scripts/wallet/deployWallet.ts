@@ -5,6 +5,7 @@ import { compile } from '@ton/blueprint';
 
 const JETTON_MASTER_ADDRESS = "EQA-EpakmTO_KBPX_NrSY88qS7vqdWKChc-VMtFK0CnSPUwr";
 const LOGGER_CONTRACT_ADDRESS = "EQAfX02OTBZbatuDEMnOIzwzkyUjpMh_Bp5duUanOK2xkw4-";
+const VESTING_MASTER_ADDRESS = "EQDqELzrZrYZYw-12Y0oUW2PKkXab1AL-TlEaj9z505vD6WX";
 
 function formatDate(timestamp: number): string {
   return new Date(timestamp * 1000).toLocaleString();
@@ -57,7 +58,10 @@ export async function run(provider: NetworkProvider) {
             change_recipient_permission: CHANGE_RECIPIENT_PERMISSION,
             claimed_amount: 0n,
             seqno: 0,
-            logger_address: Address.parse(LOGGER_CONTRACT_ADDRESS)
+            logger_address: Address.parse(LOGGER_CONTRACT_ADDRESS),
+            vesting_master_address: Address.parse(VESTING_MASTER_ADDRESS),
+            splits_count: 0,
+            max_splits: 5,
         };
         
         const vestingWallet = provider.open(

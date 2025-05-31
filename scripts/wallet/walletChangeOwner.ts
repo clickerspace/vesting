@@ -11,8 +11,7 @@ export async function run(provider: NetworkProvider) {
     
     let newOwnerAddress = Address.parse("0QA_aYew2jqj8gNdkeg-KDw8YB8ovTkKNNj02aMwpAZxNwP5");
     
-    await vestingWallet.updateOwner(
-      provider.provider(walletAddress),
+    await vestingWallet.sendUpdateOwner(
       provider.sender(),
       {
         newOwnerAddress: newOwnerAddress
